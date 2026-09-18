@@ -74,8 +74,16 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
     fun scan() {
         val clauses = ClauseSplitter.split(_ui.value.text)
-        val findings = Scanner.scan(clauses)
-            .sortedWith(compareBy({ it.severity.ordinal }, { it.clause.index }))
+        // Severity first, then findings that name an actual figure. "Deposit equal to
+        // ten months rent" is a harder fact to argue with than "there is a lock-in
+        // period", and the top card is the one a reader sees before deciding.
+        val findings = Scanner.scan(clauses).sortedWith(
+            compareBy(
+                { it.severity.ordinal },
+                { if (it.headline.any(Char::isDigit)) 0 else 1 },
+                { it.clause.index },
+            )
+        )
 
         _ui.update { it.copy(state = ScanState.Scanned(clauses.size, findings)) }
     }
