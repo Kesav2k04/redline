@@ -1,0 +1,41 @@
+id	category	text
+a01	late_fee	A penalty is charged when rent is paid after the due date.
+a02	late_fee	Interest accrues on any overdue amount owed to the landlord.
+a03	late_fee	A fixed fee applies if a payment instrument is returned unpaid.
+a04	late_fee	The penalty for delay compounds for each period the arrears continue.
+a05	security_deposit	The deposit is returned only after a long delay following handover.
+a06	security_deposit	The landlord decides unilaterally what to deduct from the deposit.
+a07	security_deposit	The deposit is forfeited if the tenant leaves before the agreed date.
+a08	security_deposit	The deposit is large relative to the monthly rent and earns no interest.
+a09	repairs	The tenant pays for repairs that would normally fall to the owner.
+a10	repairs	Structural upkeep of the building is shifted onto the occupant.
+a11	repairs	Repair costs below a threshold are always the tenant's responsibility.
+a12	repairs	The tenant may not deduct money spent on repairs from the rent.
+a13	early_termination	Leaving before the minimum period still requires paying the balance.
+a14	early_termination	An extended notice period applies before the tenant may move out.
+a15	early_termination	A fixed number of months rent is payable as damages for early exit.
+a16	early_termination	Money owed on departure is taken out of the deposit.
+a17	rent_increase	The rent rises by a set percentage at fixed intervals.
+a18	rent_increase	The owner may raise the rent during the term at short notice.
+a19	rent_increase	Staying on after a notice counts as agreeing to the new rent.
+a20	rent_increase	An increase takes effect without any fresh agreement being signed.
+a21	entry	The owner may come into the property without telling the occupant first.
+a22	entry	Inspections may happen at any time the owner considers reasonable.
+a23	entry	The property may be shown to other people while still occupied.
+a24	entry	The occupant may not refuse access when it is demanded.
+a25	subletting	The occupant may not let anyone else use any part of the property.
+a26	subletting	Breaking the occupancy restriction ends the agreement immediately.
+a27	subletting	Only the people named in the document may live in the property.
+a28	subletting	Adding another occupant triggers a higher payment.
+a29	renewal_notice	The agreement renews by itself unless notice is given well in advance.
+a30	renewal_notice	Automatic continuation comes with a higher payment than before.
+a31	renewal_notice	A notice counts as delivered even if it never reached the recipient.
+a32	renewal_notice	A long notice window must be observed to avoid being bound again.
+a33	charges	Taxes and levies on the property are passed to the occupant.
+a34	charges	Association or society dues are payable by the occupant.
+a35	charges	Any future charge imposed by an authority becomes the occupant's burden.
+a36	charges	An increase in recurring charges is absorbed entirely by the occupant.
+a37	restoration	The property must be handed back in its original state at the occupant's cost.
+a38	restoration	Anything the occupant installed must be removed before leaving.
+a39	restoration	Repainting is payable regardless of the actual condition on exit.
+a40	restoration	The cost of putting the property right falls on the departing occupant.
