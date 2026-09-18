@@ -1,0 +1,89 @@
+30 clauses, 40 archetypes, model 6120274 bytes
+embedding dimensionality: 100
+
+==================================================================
+RAW COSINE
+==================================================================
+id    truth   true cat          predicted            cos  margin
+c01   costly  late_fee          early_termination  0.902  0.0185 X
+c02   costly  late_fee          rent_increase      0.822  0.0157 X
+c03   costly  security_deposit  security_deposit   0.929  0.0293  
+c04   costly  security_deposit  repairs            0.910  0.0104 X
+c05   costly  repairs           repairs            0.882  0.0627  
+c06   costly  repairs           repairs            0.900  0.0218  
+c07   costly  repairs           repairs            0.908  0.0546  
+c08   costly  early_termination repairs            0.886  0.0160 X
+c09   costly  early_termination security_deposit   0.905  0.0006 X
+c10   costly  rent_increase     rent_increase      0.884  0.0130  
+c11   costly  rent_increase     repairs            0.869  0.0088 X
+c12   costly  entry             security_deposit   0.901  0.0014 X
+c13   costly  entry             rent_increase      0.858  0.0117 X
+c14   costly  subletting        security_deposit   0.900  0.0356 X
+c15   costly  subletting        rent_increase      0.878  0.0225 X
+c16   costly  renewal_notice    renewal_notice     0.893  0.0186  
+c17   costly  renewal_notice    renewal_notice     0.864  0.0091  
+c18   costly  charges           charges            0.914  0.0708  
+c19   costly  charges           repairs            0.857  0.0228 X
+c20   costly  restoration       repairs            0.887  0.0432 X
+b01   benign  definitions       subletting         0.806  0.0016  
+b02   benign  governing_law     subletting         0.836  0.0046  
+b03   benign  notice_address    entry              0.883  0.0023  
+b04   benign  quiet_enjoyment   late_fee           0.856  0.0127  
+b05   benign  severability      charges            0.870  0.0063  
+b06   benign  counterparts      entry              0.811  0.0018  
+b07   benign  rent_payment      security_deposit   0.899  0.0072  
+b08   benign  utilities         charges            0.867  0.0223  
+b09   benign  pets              repairs            0.843  0.0226  
+b10   benign  parking           rent_increase      0.839  0.0102  
+
+  cosine range over all pairs : 0.5402 to 0.9292
+  top-1 category correct      : 8/20   (pass needs 14)
+  median true-positive margin : 0.0255
+  90th pct benign margin      : 0.0223
+  ratio                       : 1.14x   (pass needs 3.00)
+  VERDICT                     : FAIL
+
+==================================================================
+MEAN-CENTERED
+==================================================================
+id    truth   true cat          predicted            cos  margin
+c01   costly  late_fee          early_termination  0.554  0.0142 X
+c02   costly  late_fee          rent_increase      0.316  0.0529 X
+c03   costly  security_deposit  security_deposit   0.726  0.1170  
+c04   costly  security_deposit  repairs            0.653  0.0527 X
+c05   costly  repairs           repairs            0.536  0.2260  
+c06   costly  repairs           repairs            0.592  0.1098  
+c07   costly  repairs           repairs            0.635  0.1820  
+c08   costly  early_termination repairs            0.504  0.1221 X
+c09   costly  early_termination security_deposit   0.560  0.0172 X
+c10   costly  rent_increase     rent_increase      0.347  0.1051  
+c11   costly  rent_increase     repairs            0.600  0.0379 X
+c12   costly  entry             repairs            0.544  0.0147 X
+c13   costly  entry             security_deposit   0.506  0.0532 X
+c14   costly  subletting        security_deposit   0.680  0.1770 X
+c15   costly  subletting        rent_increase      0.339  0.0561 X
+c16   costly  renewal_notice    renewal_notice     0.548  0.0295  
+c17   costly  renewal_notice    renewal_notice     0.476  0.1722  
+c18   costly  charges           charges            0.636  0.3450  
+c19   costly  charges           repairs            0.396  0.0662 X
+c20   costly  restoration       repairs            0.542  0.1506 X
+b01   benign  definitions       charges            0.234  0.0022  
+b02   benign  governing_law     charges            0.328  0.0570  
+b03   benign  notice_address    renewal_notice     0.320  0.0201  
+b04   benign  quiet_enjoyment   repairs            0.421  0.0136  
+b05   benign  severability      charges            0.446  0.0588  
+b06   benign  counterparts      repairs            0.337  0.0091  
+b07   benign  rent_payment      security_deposit   0.619  0.1610  
+b08   benign  utilities         charges            0.406  0.1759  
+b09   benign  pets              repairs            0.443  0.0850  
+b10   benign  parking           rent_increase      0.304  0.0381  
+
+  cosine range over all pairs : -0.5484 to 0.7257
+  top-1 category correct      : 8/20   (pass needs 14)
+  median true-positive margin : 0.1446
+  90th pct benign margin      : 0.1625
+  ratio                       : 0.89x   (pass needs 3.00)
+  VERDICT                     : FAIL
+
+==================================================================
+raw: FAIL    centered: FAIL
