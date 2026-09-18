@@ -14,19 +14,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -36,6 +41,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.app.Activity
+import android.content.ContextWrapper
 import dev.kesav.redline.Finding
 import dev.kesav.redline.R
 import dev.kesav.redline.ScanState
@@ -49,24 +56,39 @@ fun ScanScreen(
     viewModel: ScanViewModel = viewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
+    val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(sharedText) { viewModel.seed(sharedText) }
 
+    LaunchedEffect(ui.message) {
+        ui.message?.let {
+            snackbar.showSnackbar(it)
+            viewModel.dismissMessage()
+        }
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) }
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         when (val state = ui.state) {
             ScanState.Editing -> Editor(
                 text = ui.text,
                 onText = viewModel::edit,
                 onScan = viewModel::scan,
+                onSample = viewModel::loadSample,
                 modifier = Modifier.padding(padding),
             )
 
             is ScanState.Scanned -> Results(
                 state = state,
                 unlocked = ui.unlocked,
-                onUnlock = { viewModel.setUnlocked(true) },
+                busy = ui.busy,
+                price = ui.offer?.product?.price?.formatted,
+                onUnlock = { activity?.let(viewModel::buy) },
+                onRestore = viewModel::restore,
                 onBack = viewModel::back,
                 modifier = Modifier.padding(padding),
             )
@@ -79,6 +101,7 @@ private fun Editor(
     text: String,
     onText: (String) -> Unit,
     onScan: () -> Unit,
+    onSample: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -110,7 +133,20 @@ private fun Editor(
         ) {
             Text("Scan")
         }
+
+        TextButton(onClick = onSample, modifier = Modifier.fillMaxWidth()) {
+            Text("Try it on a sample lease")
+        }
     }
+}
+
+private fun android.content.Context.findActivity(): Activity? {
+    var c = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
 }
 
 /**
@@ -122,7 +158,10 @@ private fun Editor(
 private fun Results(
     state: ScanState.Scanned,
     unlocked: Boolean,
+    busy: Boolean,
+    price: String?,
     onUnlock: () -> Unit,
+    onRestore: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -161,8 +200,24 @@ private fun Results(
 
             if (!unlocked && state.findings.size > 1) {
                 item {
-                    Button(onClick = onUnlock, modifier = Modifier.fillMaxWidth()) {
-                        Text("Show the other ${state.findings.size - 1}")
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            onClick = onUnlock,
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            if (busy) {
+                                CircularProgressIndicator(Modifier.height(18.dp))
+                            } else {
+                                Text(
+                                    "Show the other ${state.findings.size - 1}" +
+                                        (price?.let { " for $it" } ?: "")
+                                )
+                            }
+                        }
+                        TextButton(onClick = onRestore, modifier = Modifier.fillMaxWidth()) {
+                            Text("Already bought it? Restore")
+                        }
                     }
                 }
             }

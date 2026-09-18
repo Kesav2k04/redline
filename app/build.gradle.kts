@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -14,6 +16,17 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1"
+
+        // Read from local.properties, which is not committed. Absent key means the
+        // app still builds and runs from a clean clone, with the paywall locked.
+        val localProps = Properties().apply {
+            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+        }
+        buildConfigField(
+            "String",
+            "REVENUECAT_API_KEY",
+            "\"${localProps.getProperty("revenuecat.apiKey", "")}\"",
+        )
     }
 
     buildTypes {
@@ -39,6 +52,11 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
 
