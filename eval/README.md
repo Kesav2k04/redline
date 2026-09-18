@@ -78,3 +78,46 @@ curl -L -o eval/models/universal_sentence_encoder.tflite \
 ```
 
 `RESULTS.txt` is the unedited output of that command.
+
+---
+
+## What replaced it, and how well that works
+
+Rules that extract the actual quantity and name it. There are 27 of them.
+
+### On the frozen corpus
+
+| | Result |
+|---|---|
+| Costly clauses caught | **20 / 20** |
+| Benign clauses left alone | **10 / 10** |
+
+Compare that against 8 / 20 for the embedding route on identical text. This is a
+regression fixture though, not a claim about unseen leases: the rules were written with
+these clauses available, so passing here only proves they fire where intended.
+
+### On a held-out set
+
+`heldout.tsv` holds ten more clauses written **after** the rules were finished, in
+deliberately different language: lessor and lessee rather than landlord and tenant,
+"demised premises", "surcharge", "discharged by".
+
+| | Result |
+|---|---|
+| Costly clauses caught | **4 / 5** |
+| Benign clauses left alone | **5 / 5** |
+
+### The known gap
+
+`h01` is missed: *"A surcharge of five percent shall be levied where rent is received
+after the tenth day of the month."* The late fee rule looks for one of unpaid, overdue,
+default, delay or late, and that sentence uses none of them. It says the same thing by
+naming a date instead.
+
+It would take one word to fix and the fix is deliberately not being made, because
+editing a rule so a held-out clause passes turns it into a training clause and the
+number stops meaning anything. It is listed here instead.
+
+That gap is also the honest shape of the whole approach. Rules catch what they were
+written to catch. When they miss, they miss silently and say nothing, which is why the
+app reports "no rule matched" rather than "this lease is clean".

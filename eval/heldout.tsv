@@ -1,0 +1,11 @@
+id	label	category	text
+h01	costly	late_fee	A surcharge of five percent shall be levied where rent is received after the tenth day of the month.
+h02	costly	restoration	The Lessee shall reinstate the demised premises to their original condition upon expiry of the term.
+h03	costly	entry	The Lessor reserves the right to inspect the said premises without notice to the Lessee.
+h04	costly	security_deposit	Should the Lessee quit the demised premises prior to expiry, the security deposit shall be forfeited in its entirety.
+h05	costly	charges	All corporation tax and other statutory outgoings in respect of the said premises shall be discharged by the Lessee.
+h06	benign	fixtures	The Lessee shall be entitled to install a broadband connection at their own cost subject to the rules of the building.
+h07	benign	time	Time shall be of the essence in respect of all payments to be made under this deed.
+h08	benign	signage	The Lessee shall permit the Lessor to affix a nameplate at the entrance of the building.
+h09	benign	entire_agreement	This deed comprises the entire agreement between the parties and supersedes all prior understandings.
+h10	benign	alterations	The Lessee may, with the written consent of the Lessor, install an air conditioning unit in the bedroom.
