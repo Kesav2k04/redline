@@ -1,0 +1,31 @@
+id	label	category	text
+c01	costly	late_fee	If any instalment of rent remains unpaid for three days after the due date, the Tenant shall pay an additional charge of ten percent of the monthly rent for each week or part thereof during which the default continues.
+c02	costly	late_fee	A dishonoured cheque shall attract a charge of two thousand rupees together with interest at eighteen percent per annum calculated from the original due date until realisation.
+c03	costly	security_deposit	The Landlord shall refund the interest free deposit within ninety days of the Tenant vacating, after deducting such sums as the Landlord in its sole discretion considers necessary for repainting and restoration.
+c04	costly	security_deposit	The Tenant shall deposit a sum equivalent to ten months rent, which shall not carry interest and shall stand forfeited in the event the Tenant vacates before completion of the agreed term.
+c05	costly	repairs	The Tenant shall at their own expense keep the premises including all fixtures, sanitary installations, electrical wiring and the structure in the same condition as at the commencement, reasonable wear and tear excepted only where the Landlord agrees in writing.
+c06	costly	repairs	All repairs, whether of a structural nature or otherwise, shall be carried out by the Tenant at the Tenant's cost, and the Landlord shall bear no liability for any expenditure so incurred.
+c07	costly	repairs	Any repair below five thousand rupees shall be borne solely by the Tenant, and the Tenant shall not set off any such amount against rent under any circumstances.
+c08	costly	early_termination	Should the Tenant vacate prior to the expiry of the lock in period of eleven months, the Tenant shall remain liable for the rent for the entire unexpired portion of that period.
+c09	costly	early_termination	Termination by the Tenant shall require six months notice in writing, failing which three months rent shall be payable as liquidated damages and shall be adjusted against the deposit.
+c10	costly	rent_increase	The rent shall stand enhanced by ten percent at the end of each period of eleven months, and such enhancement shall operate automatically without the requirement of any further agreement.
+c11	costly	rent_increase	The Landlord may revise the rent at any time during the term by giving fifteen days notice, and the Tenant's continued occupation after such notice shall constitute acceptance of the revised rent.
+c12	costly	entry	The Landlord or their authorised agent shall be entitled to enter the premises at any reasonable hour without prior notice for the purpose of inspection, and the Tenant shall not obstruct such entry.
+c13	costly	entry	During the final two months of the term the Landlord may show the premises to prospective tenants on any day between nine in the morning and eight in the evening.
+c14	costly	subletting	The Tenant shall not sublet, assign, or part with possession of any portion of the premises, and any breach shall entitle the Landlord to terminate this agreement forthwith and forfeit the entire deposit.
+c15	costly	subletting	No person other than those named in the schedule shall be permitted to reside in the premises, and the introduction of any additional occupant shall attract an increase in rent of fifteen percent.
+c16	costly	renewal_notice	If the Tenant fails to communicate an intention to renew at least ninety days before expiry, this agreement shall stand automatically renewed for a further eleven months on the same terms with rent enhanced by ten percent.
+c17	costly	renewal_notice	Any notice under this agreement shall be deemed to have been served on the third day after dispatch by registered post, whether or not the same is actually received by the addressee.
+c18	costly	charges	The Tenant shall bear all outgoings including municipal taxes, property tax, society maintenance, sinking fund contributions and any levy hereafter imposed by any authority in respect of the premises.
+c19	costly	charges	In the event of any increase in the society maintenance charges during the term, the entire increase shall be borne by the Tenant without any corresponding reduction in rent.
+c20	costly	restoration	Upon vacating, the Tenant shall restore the premises to its original condition including removal of all fittings installed by the Tenant, and shall pay the cost of professional repainting irrespective of the condition of the walls.
+b01	benign	definitions	In this agreement, the expression the Premises shall mean the residential flat bearing number described in Schedule A together with the appurtenances thereto.
+b02	benign	governing_law	This agreement shall be governed by and construed in accordance with the laws of India and the courts at Chennai shall have exclusive jurisdiction.
+b03	benign	notice_address	All notices shall be sent to the addresses set out at the head of this agreement, and either party may change its address by giving written intimation to the other.
+b04	benign	quiet_enjoyment	The Landlord covenants that the Tenant, paying the rent and observing the terms herein, shall peacefully hold and enjoy the premises during the term without interruption by the Landlord.
+b05	benign	severability	If any provision of this agreement is held to be invalid or unenforceable, the remaining provisions shall continue in full force and effect.
+b06	benign	counterparts	This agreement may be executed in two counterparts, each of which shall be deemed an original and both of which together shall constitute one and the same instrument.
+b07	benign	rent_payment	The rent shall be paid on or before the fifth day of each calendar month by electronic transfer to the account nominated by the Landlord.
+b08	benign	utilities	The Tenant shall pay for electricity and water consumed in the premises directly to the supplying authority according to the meter readings for the relevant period.
+b09	benign	pets	The Tenant may keep one domestic pet in the premises subject to compliance with the rules of the housing society.
+b10	benign	parking	One covered car parking space bearing the number set out in Schedule A is allotted to the Tenant for the duration of the term.
