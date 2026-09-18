@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -34,7 +36,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -129,12 +133,12 @@ private fun Editor(
         Button(
             onClick = onScan,
             enabled = text.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
             Text("Scan")
         }
 
-        TextButton(onClick = onSample, modifier = Modifier.fillMaxWidth()) {
+        TextButton(onClick = onSample, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("Try it on a sample lease")
         }
     }
@@ -177,6 +181,7 @@ private fun Results(
                 },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
             )
             Text(
                 text = if (flagged == 0) {
@@ -204,7 +209,7 @@ private fun Results(
                         Button(
                             onClick = onUnlock,
                             enabled = !busy,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         ) {
                             if (busy) {
                                 CircularProgressIndicator(Modifier.height(18.dp))
@@ -215,7 +220,10 @@ private fun Results(
                                 )
                             }
                         }
-                        TextButton(onClick = onRestore, modifier = Modifier.fillMaxWidth()) {
+                        TextButton(
+                            onClick = onRestore,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        ) {
                             Text("Already bought it? Restore")
                         }
                     }
@@ -223,7 +231,10 @@ private fun Results(
             }
         }
 
-        TextButton(onClick = onBack, modifier = Modifier.padding(horizontal = 8.dp)) {
+        TextButton(
+            onClick = onBack,
+            modifier = Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp),
+        ) {
             Text("Edit text")
         }
     }
@@ -231,16 +242,16 @@ private fun Results(
 
 @Composable
 private fun FindingCard(finding: Finding, revealed: Boolean) {
+    val spoken = if (revealed) {
+        "${finding.severity.name.lowercase()} risk. ${finding.headline}. ${finding.reason}"
+    } else {
+        "Locked finding, ${finding.severity.name.lowercase()} risk. Buy the report to read it."
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .semantics {
-                contentDescription = if (revealed) {
-                    "${finding.severity.name.lowercase()} risk. ${finding.headline}. ${finding.reason}"
-                } else {
-                    "Locked finding, ${finding.severity.name.lowercase()} risk"
-                }
-            },
+            .clearAndSetSemantics { contentDescription = spoken },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
@@ -290,8 +301,7 @@ private fun SeverityChip(severity: Severity) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
-                .height(10.dp)
-                .fillMaxWidth(0.022f)
+                .size(width = 8.dp, height = 8.dp)
                 .background(tint, RoundedCornerShape(2.dp))
         )
         Text(

@@ -6,6 +6,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+}
+
 android {
     namespace = "dev.kesav.redline"
     compileSdk = 36
@@ -19,18 +23,31 @@ android {
 
         // Read from local.properties, which is not committed. Absent key means the
         // app still builds and runs from a clean clone, with the paywall locked.
-        val localProps = Properties().apply {
-            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
-        }
         buildConfigField(
             "String",
             "REVENUECAT_API_KEY",
-            "\"${localProps.getProperty("revenuecat.apiKey", "")}\"",
+            "\"${localProperties.getProperty("revenuecat.apiKey", "")}\"",
         )
+    }
+
+    // Only configured when a keystore is named in local.properties, so a clean clone
+    // still builds a release variant without anyone's signing material.
+    val keystore = localProperties.getProperty("release.storeFile")?.let(::file)
+
+    signingConfigs {
+        if (keystore != null && keystore.exists()) {
+            create("release") {
+                storeFile = keystore
+                storePassword = localProperties.getProperty("release.storePassword")
+                keyAlias = localProperties.getProperty("release.keyAlias")
+                keyPassword = localProperties.getProperty("release.keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
