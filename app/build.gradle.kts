@@ -18,9 +18,7 @@ android {
 
     buildTypes {
         release {
-            // Left off deliberately: MediaPipe TextEmbedder crashes under R8 on
-            // several 0.10.x releases (google-ai-edge/mediapipe#6116, still open).
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -56,7 +54,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.revenuecat.purchases)
-    implementation(libs.mediapipe.tasks.text)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
