@@ -66,7 +66,12 @@ catch what they were written to catch, and when they miss they say nothing.
   the report renders**, so a paid result is never shown and then withdrawn.
 - The price on the button comes from the offering, not from a string in the code.
 - Cancelled purchases are not treated as errors.
-- `Billing.restore()` implements restore on reinstall.
+- `Billing.restore()` implements restore on reinstall, and it actually works after one.
+  There are no accounts here, so the purchase is keyed to a SHA-256 hash of `ANDROID_ID`,
+  which is scoped to the signing key and outlives the app's own storage. Automatic device
+  identifier collection is off, so what reaches RevenueCat is stable without being a device
+  identifier. `PurchaseIdTest` pins that the hash stays stable, because nothing else here
+  would notice if it stopped.
 - No key in the repository. `BuildConfig.REVENUECAT_API_KEY` is read from
   `local.properties`, which is not committed. With no key the app still builds, runs and
   scans, with the paywall locked.
