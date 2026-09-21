@@ -2,6 +2,7 @@ package dev.kesav.redline
 
 import android.app.Activity
 import android.app.Application
+import android.provider.Settings
 import android.util.Log
 import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.LogLevel
@@ -14,6 +15,7 @@ import com.revenuecat.purchases.awaitCustomerInfo
 import com.revenuecat.purchases.awaitOfferings
 import com.revenuecat.purchases.awaitPurchase
 import com.revenuecat.purchases.awaitRestore
+import java.security.MessageDigest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +31,12 @@ object Billing {
     const val ENTITLEMENT = "full_report"
 
     private const val TAG = "Billing"
+
+    /**
+     * A firmware bug shipped this same value on a batch of early devices, so it
+     * identifies nothing and has to be refused.
+     */
+    private const val SHARED_BAD_ANDROID_ID = "9774d56d682e549c"
 
     private val _unlocked = MutableStateFlow(false)
     val unlocked: StateFlow<Boolean> = _unlocked.asStateFlow()
@@ -47,8 +55,41 @@ object Billing {
         }
 
         Purchases.logLevel = LogLevel.WARN
-        Purchases.configure(PurchasesConfiguration.Builder(app, apiKey).build())
+
+        val config = PurchasesConfiguration.Builder(app, apiKey)
+            // Without this the SDK mints a fresh anonymous id on every install, and a
+            // reinstall then has nothing to restore against.
+            .appUserID(purchaseId(androidId(app)))
+            // The app asks who you are nowhere else, so it should not start here.
+            .automaticDeviceIdentifierCollectionEnabled(false)
+            .build()
+
+        Purchases.configure(config)
         configured = true
+    }
+
+    private fun androidId(app: Application): String? =
+        runCatching {
+            Settings.Secure.getString(app.contentResolver, Settings.Secure.ANDROID_ID)
+        }.getOrNull()
+
+    /**
+     * Purchases are keyed to the device rather than to an account, because there are no
+     * accounts and a restore has to survive an uninstall.
+     *
+     * `ANDROID_ID` is the only value with the right lifetime: it is scoped to the signing
+     * key, it needs no permission, and it outlives the app's own storage. It is hashed
+     * before it goes anywhere, so what reaches RevenueCat is stable without being a
+     * device identifier. Returning null hands the SDK back its anonymous behaviour, which
+     * costs restore but never crashes.
+     */
+    internal fun purchaseId(raw: String?): String? {
+        if (raw.isNullOrBlank() || raw == SHARED_BAD_ANDROID_ID) return null
+
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("redline:$raw".toByteArray(Charsets.UTF_8))
+
+        return digest.take(16).joinToString("") { "%02x".format(it) }
     }
 
     /**
