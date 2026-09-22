@@ -1,5 +1,6 @@
 package dev.kesav.redline.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -7,6 +8,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -74,6 +78,11 @@ fun ScanScreen(
     val activity = remember(context) { context.findActivity() }
     val snackbar = remember { SnackbarHostState() }
 
+    // Without this, a back swipe on the results screen finishes the activity and closes
+    // the app. The reader's own lease is still in the text field behind it, so the app
+    // shutting down looks like it crashed rather than like it navigated.
+    BackHandler(enabled = ui.state is ScanState.Scanned) { viewModel.back() }
+
     LaunchedEffect(sharedText) { viewModel.seed(sharedText) }
 
     LaunchedEffect(ui.message) {
@@ -120,9 +129,15 @@ private fun Editor(
     onSample: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Three things this column has to survive: a keyboard covering the lower half, a
+    // sixteen-line text field, and a reader at 200% font scale. Without the scroll and
+    // the ime padding the Scan button sits underneath the keyboard, which is how the
+    // first attempt to drive this screen ended up typing into the lease field instead.
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -362,7 +377,12 @@ private fun animationsEnabled(): Boolean {
 @Composable
 private fun FindingCard(finding: Finding, revealed: Boolean, row: Int = 0) {
     val spoken = if (revealed) {
-        "${finding.severity.name.lowercase()} risk. ${finding.headline}. ${finding.reason}"
+        // The clause text belongs in here. Leaving it out told a screen reader that a
+        // costly clause existed and what it was called, then withheld the sentence the
+        // whole app exists to show, which is the one thing a sighted reader gets for
+        // free by looking down two lines.
+        "${finding.severity.name.lowercase()} risk. ${finding.headline}. ${finding.reason} " +
+            "The clause reads: ${finding.clause.text}"
     } else {
         "Locked finding, ${finding.severity.name.lowercase()} risk. Buy the report to read it."
     }
