@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Redline" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- The window paints before Compose does, and on Android 12 and later the system
+         splash takes its colour from windowBackground. Left at the platform default it
+         was #FAFAFA in both modes, so a dark-mode phone flashed white on every cold start
+         before the ink screen arrived. -->
+    <style name="Theme.Redline" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+    </style>
 </resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The same two values as Paper and Ink in ui/Theme.kt. The window needs them as
+         resources because it paints before Compose exists. -->
+    <color name="paper">#FFFBFAF7</color>
+    <color name="ink">#FF14161A</color>
+</resources>
