@@ -2,7 +2,7 @@
 
 Reads a rental lease and points at the clauses that will cost you money.
 
-Built by a student for the Next Gen Student Award at RevenueCat Shipaton 2026.
+Built by a student for the Next Gen Award at RevenueCat Shipaton 2026.
 
 Everything runs on the device. No account, no upload, no network call at runtime. You
 paste the lease or share it from whatever app it arrived in, and the text never leaves
@@ -93,10 +93,17 @@ policy.
 
 The rules were not narrowed, because they are right about leases and bending them to
 dodge a recipe would cost real catches. The document is checked instead, once, in
-[`LeaseCheck.kt`](app/src/main/java/dev/kesav/redline/LeaseCheck.kt): a tenancy agreement
-that never says tenant, landlord, lease, rent or premises does not exist. Two distinct
-terms are required, which is loose enough to accept a single clause shared in from
-another app and tight enough to reject all four documents above.
+[`LeaseCheck.kt`](app/src/main/java/dev/kesav/redline/LeaseCheck.kt), which asks for two
+distinct words that only tenancies use. That is loose enough to accept a single clause
+shared in from another app and tight enough to reject all four documents above.
+
+The first version of that list was too narrow in the other direction. An Indian leave and
+licence deed names a licensor and a licensee and never says landlord, and 9 of 24 real
+clauses in [`OnTopicTest`](app/src/test/java/dev/kesav/redline/OnTopicTest.kt) were told
+they were not a lease. Now 0 of 24 are. Licensor, licensee and licence count as one word
+rather than three, because "the Licensor grants the Licensee a licence to use the
+Software" would otherwise pass as a tenancy, and a test holds that line. Five clauses
+still fail, each with its reason written beside it.
 
 When the check fails the app says so, shows what matched anyway so the claim can be
 checked, and **does not offer to sell anything**. `OffTopicTest` pins all of it, including
