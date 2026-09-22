@@ -6,6 +6,15 @@ Everything runs on the device. No account, no upload, no network call at runtime
 paste the lease or share it from whatever app it arrived in, and the text never leaves
 the phone.
 
+<p>
+  <img src="docs/locked.png" alt="Results screen. Eleven of sixteen clauses flagged, the first finding readable in full, the rest redacted behind a one-time purchase." width="46%">
+  <img src="docs/unlocked.png" alt="The same screen after purchase. Every finding readable, with a button to send the list onward." width="46%">
+</p>
+
+The scan always runs to completion and the count is always honest. The first finding is
+free, in full, with the sentence it came from. What the purchase buys is the other
+eighteen, and a way to send them to whoever can do something about them.
+
 ## Why it works the way it does
 
 The obvious build is on-device sentence embeddings: write out a bank of "costly clause"
@@ -77,6 +86,11 @@ catch what they were written to catch, and when they miss they say nothing.
   identifier collection is off, so what reaches RevenueCat is stable without being a device
   identifier. `PurchaseIdTest` pins that the hash stays stable, because nothing else here
   would notice if it stopped.
+- What the purchase buys is durable. `Report.build` turns the findings into plain text
+  and hands it to `ACTION_SEND`, so the lease arrives by share and the argument leaves
+  the same way. Nothing is written to disk on the way out. Finding eleven costly clauses
+  is only half the job: the tenant still has to raise them with a landlord, and retyping
+  nineteen findings into a message is where that stops happening.
 - No key in the repository. `BuildConfig.REVENUECAT_API_KEY` is read from
   `local.properties`, which is not committed. With no key the app still builds, runs and
   scans, with the paywall locked.
@@ -151,6 +165,23 @@ One bug worth naming, because the test that pins it is more interesting than the
 deposit"*, the deposit rule read the first months figure it found and announced a
 six-month deposit that did not exist. Quantities now have to sit beside the thing they
 describe.
+
+## Accessibility
+
+Not a checklist item here, because the people most likely to be handed a bad lease are
+not always the people best served by an app.
+
+- Every finding card is one merged announcement rather than five fragments, and it
+  includes the clause text itself. Reading out "costly risk, deposit equal to ten months
+  rent" and then withholding the sentence would hand a screen reader user the headline
+  and keep the evidence.
+- A locked finding announces that it is locked and why, so the severity and the count
+  are available without paying, exactly as they are on screen.
+- Severity carries a word, "Costly" or "Worth checking", not only a colour.
+- Touch targets are at least 48dp. The editor scrolls and lifts above the keyboard, so
+  the Scan button is reachable at 200% font scale.
+- The reveal animation reads `ANIMATOR_DURATION_SCALE` and does nothing when animations
+  are turned off device-wide.
 
 ## What this is not
 
