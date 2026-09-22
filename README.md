@@ -2,18 +2,21 @@
 
 Reads a rental lease and points at the clauses that will cost you money.
 
+Built by a student for the Next Gen Student Award at RevenueCat Shipaton 2026.
+
 Everything runs on the device. No account, no upload, no network call at runtime. You
 paste the lease or share it from whatever app it arrived in, and the text never leaves
 the phone.
 
 <p>
   <img src="docs/locked.png" alt="Results screen. Eleven of sixteen clauses flagged, the first clause readable in full, the rest redacted behind a one-time purchase." width="46%">
-  <img src="docs/unlocked.png" alt="The same screen after purchase. Every finding readable, with a button to send the list onward." width="46%">
+  <img src="docs/unlocked.png" alt="The same screen after purchase. Every clause readable, with a button to send the list onward." width="46%">
 </p>
 
-The scan always runs to completion and the count is always honest. The first finding is
-free, in full, with the sentence it came from. What the purchase buys is the other
-eighteen, and a way to send them to whoever can do something about them.
+The scan always runs to completion and the count is always honest. The first flagged
+clause is free, in full, with the sentence it came from. What the purchase buys is the
+other ten clauses and the eighteen problems inside them, and a way to send the list to
+whoever can do something about it.
 
 ## Why it works the way it does
 
