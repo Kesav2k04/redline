@@ -34,6 +34,13 @@ android {
     // still builds a release variant without anyone's signing material.
     val keystore = localProperties.getProperty("release.storeFile")?.let(::file)
 
+    // A Test Store key is simulated purchases against no store account at all. The SDK
+    // refuses to use one outside a debuggable build, so the build type has to follow the
+    // key rather than the other way round. See the release block below.
+    val usingTestStore = localProperties
+        .getProperty("revenuecat.apiKey", "")
+        .startsWith("test_")
+
     signingConfigs {
         if (keystore != null && keystore.exists()) {
             create("release") {
@@ -55,15 +62,22 @@ android {
             )
 
             // Observed, not documented: with a Test Store key in a non-debuggable
-            // build the SDK puts up a "Wrong API Key" dialog and closes the app. That
-            // is the right default, because RevenueCat's own guidance is never to
-            // submit a store build configured with a Test Store key.
+            // build the SDK puts up a "Wrong API Key" dialog and closes the app. The
+            // check is `ApplicationInfo.flags and FLAG_DEBUGGABLE`, reached from
+            // PurchasesFactory. It is the right default, because RevenueCat's guidance
+            // is never to ship a store build configured against the Test Store.
             //
-            // This app is never submitted to a store. It is installed as an APK and
-            // every purchase it can make is simulated, so the situation the guard
-            // exists to prevent cannot arise. Play also rejects debuggable artifacts,
-            // which is the same moment this and the key would both have to change.
-            isDebuggable = true
+            // So the two are tied together here rather than one being forced open. A
+            // Test Store key produces a debuggable build and a store key does not, and
+            // swapping the key is the single edit that flips both. Leaving a bare
+            // `isDebuggable = true` behind would have been a workaround that outlived
+            // its reason and silently shipped an unoptimised, Play-rejected artifact.
+            //
+            // Worth stating plainly: a debuggable build disables R8's optimisation and
+            // obfuscation passes, so `isMinifyEnabled` above does nothing while a Test
+            // Store key is in use. It is kept, with the ProGuard rules, because it is
+            // what runs the moment a real store key is configured.
+            isDebuggable = usingTestStore
         }
     }
 

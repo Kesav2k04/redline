@@ -114,7 +114,9 @@ cd redline
 ```
 
 The APK lands in `app/build/outputs/apk/debug/`. Nothing else is needed: no keys, no
-services to sign up for, and no `local.properties` entries beyond `sdk.dir`.
+services to sign up for, and no `local.properties` entries beyond `sdk.dir`. Opening the
+folder in Android Studio writes that line for you; from a bare terminal, an `ANDROID_HOME`
+pointing at the SDK does the same job and the file can stay absent.
 
 To exercise the purchase flow, add your own key:
 
