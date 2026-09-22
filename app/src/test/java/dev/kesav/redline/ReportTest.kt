@@ -33,7 +33,7 @@ class ReportTest {
         val clause = Clause(0, "4. Security deposit.\nThe Tenant shall deposit\n  ten months rent.")
         val state = ScanState.Scanned(
             clauseCount = 1,
-            findings = listOf(Finding(clause, "r", "Deposit equal to 10 months rent", "why", Severity.HIGH)),
+            findings = listOf(Finding(clause, "r", "Your deposit", "Deposit equal to 10 months rent", "why", Severity.HIGH)),
         )
         val text = Report.build(state)
         assertTrue(

@@ -2,6 +2,7 @@ package dev.kesav.redline
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import dev.kesav.redline.ui.severitySplit
 import org.junit.Test
@@ -42,8 +43,8 @@ class CountsTest {
         val scanned = ScanState.Scanned(
             clauseCount = 1,
             findings = listOf(
-                Finding(clause, "deposit-size", "Deposit equal to 10 months rent", "why", Severity.HIGH),
-                Finding(clause, "deposit-delay", "Deposit returned only after 90 days", "why", Severity.HIGH),
+                Finding(clause, "deposit-size", "Your deposit", "Deposit equal to 10 months rent", "why", Severity.HIGH),
+                Finding(clause, "deposit-delay", "Your deposit", "Deposit returned only after 90 days", "why", Severity.HIGH),
             ),
         )
         assertEquals(1, scanned.flaggedClauses)
@@ -54,21 +55,38 @@ class CountsTest {
     fun `the subheading never contradicts the heading`() {
         val scanned = scanSample()
         val line = severitySplit(scanned.highClauses, scanned.flaggedClauses)
-        // The old line read "9 of them are worth arguing about" under a heading saying
-        // eleven clauses cost money, which invites the reader to ask what is wrong with
-        // the other two. The split adds up instead.
         assertEquals("11 clauses flagged in the fixture", 11, scanned.flaggedClauses)
-        assertEquals("9 marked costly, 2 worth checking.", line)
+        assertEquals("9 of them are serious.", line)
     }
 
     @Test
-    fun `the split always accounts for every flagged clause`() {
+    fun `the subheading never says a flagged clause is free`() {
+        // The heading above it reads "N of M clauses will cost you money". Any word in
+        // the line beneath that implies some of those N are fine puts the two largest
+        // pieces of type on the screen in open disagreement, which is exactly what
+        // "9 marked costly, 2 worth checking" did.
+        val innocent = listOf("worth checking", "minor", "harmless", "fine", "no problem")
         for (flagged in 1..30) {
             for (high in 0..flagged) {
                 val line = severitySplit(high, flagged)
-                val numbers = Regex("\\d+").findAll(line).map { it.value.toInt() }.toList()
-                val total = if (numbers.size == 2) numbers.sum() else numbers.singleOrNull() ?: flagged
-                assertEquals("$high of $flagged produced: $line", flagged, total)
+                for (word in innocent) {
+                    assertFalse(
+                        "$high of $flagged implies a flagged clause is free: $line",
+                        line.contains(word),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `the subheading never claims more serious clauses than were flagged`() {
+        for (flagged in 1..30) {
+            for (high in 0..flagged) {
+                val line = severitySplit(high, flagged)
+                for (n in Regex("[0-9]+").findAll(line).map { it.value.toInt() }) {
+                    assertTrue("$high of $flagged produced $n in: $line", n <= flagged)
+                }
             }
         }
     }
@@ -102,8 +120,8 @@ class CountsTest {
         val group = ClauseGroup(
             clause,
             listOf(
-                Finding(clause, "r1", "m", "why", Severity.MEDIUM),
-                Finding(clause, "r2", "h", "why", Severity.HIGH),
+                Finding(clause, "r1", "Your deposit", "m", "why", Severity.MEDIUM),
+                Finding(clause, "r2", "Your deposit", "h", "why", Severity.HIGH),
             ),
         )
         assertEquals(Severity.HIGH, group.worst)
@@ -116,8 +134,8 @@ class CountsTest {
         val scanned = ScanState.Scanned(
             clauseCount = 2,
             findings = listOf(
-                Finding(costly, "r1", "h", "why", Severity.HIGH),
-                Finding(minor, "r2", "m", "why", Severity.MEDIUM),
+                Finding(costly, "r1", "Your deposit", "h", "why", Severity.HIGH),
+                Finding(minor, "r2", "Moving out", "m", "why", Severity.MEDIUM),
             ),
         )
         assertEquals(2, scanned.flaggedClauses)

@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -397,9 +398,18 @@ private fun Results(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                // Enabled through the purchase, guarded in the click instead.
+                //
+                // A disabled filled Button in Material 3 is not a dimmed red button: it
+                // is `onSurface` at 12% alpha, which on this paper is a pale grey slab.
+                // Disabling on `busy` therefore turned the one red element on the screen
+                // grey at the exact second the money moves, which is the climax of the
+                // demo. Measured on device: the first painted frame is already red,
+                // because the entitlement read finishes while the reader is still in
+                // the editor, so `known` is the honest disable and `busy` never was.
                 Button(
-                    onClick = onUnlock,
-                    enabled = known && !busy,
+                    onClick = { if (!busy) onUnlock() },
+                    enabled = known,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
@@ -411,6 +421,8 @@ private fun Results(
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
                             strokeWidth = 2.dp,
+                            // Defaults to primary, the same red as the fill underneath.
+                            color = MaterialTheme.colorScheme.onPrimary,
                         )
                     } else {
                         // "findings", not a bare number. The heading counts clauses and
@@ -439,6 +451,11 @@ private fun Results(
                     TextButton(
                         onClick = onBack,
                         modifier = Modifier.heightIn(min = 48.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            // Next to a filled button this was the same red, so going back
+                            // to edit signalled just as loudly as paying.
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                     ) {
                         Text("Edit text")
                     }
@@ -476,16 +493,27 @@ private fun Results(
                 TextButton(
                     onClick = onBack,
                     modifier = Modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        // Next to a filled button this was the same red, so going back
+                        // to edit signalled just as loudly as paying.
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                 ) {
                     Text("Edit text")
                 }
             }
         } else {
-            TextButton(
-                onClick = onBack,
-                modifier = Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp),
+            // The other branches draw a divider and 16dp. This one used to hug the
+            // bottom edge with 8dp and no rule above it, and it is the state a judge
+            // lands on if they paste arbitrary text during a live demo.
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.Center,
             ) {
-                Text("Edit text")
+                TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("Edit text")
+                }
             }
         }
     }
@@ -528,17 +556,20 @@ private fun animationsEnabled(): Boolean {
 /**
  * The line under the heading, which is the legend for the chips on the cards.
  *
- * It used to read "9 of them are worth arguing about", which is backwards: if eleven
- * clauses cost money then all eleven are worth arguing about, and a reader who notices
- * that wonders what is wrong with the other two. The number was never a subset of
- * importance, it was the severity split, so the line now says that and happens to teach
- * the two words the cards use before the reader meets them.
+ * Two earlier versions were wrong in opposite directions. "9 of them are worth arguing
+ * about" was backwards: if eleven clauses cost money then all eleven are worth arguing
+ * about. "9 marked costly, 2 worth checking" then put the subheading in open conflict
+ * with the headline above it, because a reader takes "worth checking" to mean the other
+ * two are free, and they are not. Every flagged clause costs money; the split is how
+ * serious, not whether. Saying only that leaves the two largest lines on the screen
+ * agreeing with each other.
  */
 internal fun severitySplit(high: Int, flagged: Int): String = when {
-    high == flagged && flagged == 1 -> "The one below is marked costly."
-    high == flagged -> "All $flagged are marked costly."
-    high == 0 -> "None is marked costly, but all $flagged are worth checking."
-    else -> "$high marked costly, ${flagged - high} worth checking."
+    high == flagged && flagged == 1 -> "The one below is a serious one."
+    high == flagged -> "All $flagged are serious."
+    high == 0 -> "None is in the worst band, and all $flagged still cost you."
+    high == 1 -> "One of them is serious."
+    else -> "$high of them are serious."
 }
 
 /**
@@ -667,14 +698,29 @@ private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
                 // Redaction rather than a blur: Modifier.blur does nothing below API 31
                 // and would quietly show the text it is meant to hide.
                 //
-                // Widths come from the finding rather than being fixed, because four
+                // The subject is not withheld. Naming it costs nothing, because knowing
+                // a clause is about the deposit is not knowing what is wrong with it,
+                // and a card that says "Your deposit, 5 problems" argues for itself in
+                // a way that three anonymous bars never will.
+                Text(
+                    text = group.findings.first().topic,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+
+                // One bar per hidden finding, up to three. A card printing "1 problem"
+                // above three bars contradicts its own count, and the count is the most
+                // honest argument this card has for being paid for. Capping at three
+                // keeps a five-problem clause from dominating the screen.
+                //
+                // Widths come from the clause rather than being fixed, because four
                 // identical cards in a row read as one component repeated, and a
                 // repeated component reads as a placeholder. Sentences are not all the
                 // same length.
-                val bars = redactionWidths(group.findings.first().headline)
-                Redacted(widthFraction = bars[0], height = 16.dp)
-                Redacted(widthFraction = bars[1], height = 12.dp)
-                Redacted(widthFraction = bars[2], height = 12.dp)
+                val bars = redactionWidths(group.clause.text)
+                val heights = listOf(16.dp, 12.dp, 12.dp)
+                repeat(minOf(group.findings.size, 3)) { i ->
+                    Redacted(widthFraction = bars[i], height = heights[i])
+                }
             }
             }
             }

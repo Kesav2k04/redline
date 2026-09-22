@@ -5,6 +5,14 @@ enum class Severity { HIGH, MEDIUM }
 data class Finding(
     val clause: Clause,
     val ruleId: String,
+    /**
+     * The subject this finding belongs to, from the rule that produced it.
+     *
+     * It is the one thing about a locked finding that can be shown without giving it
+     * away. "Your deposit, 5 problems, locked" is a reason to pay. Three grey bars and
+     * a count is a loading screen with a price on it.
+     */
+    val topic: String,
     val headline: String,
     val reason: String,
     val severity: Severity,
@@ -47,7 +55,7 @@ private class Pattern(
             value = Numbers.valueBefore(window(clause.text), unit) ?: return null
             if (atLeast != null && value < atLeast) return null
         }
-        return Finding(clause, id, headline(value), reason, severity)
+        return Finding(clause, id, topic, headline(value), reason, severity)
     }
 
     /**
