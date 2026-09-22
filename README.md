@@ -116,6 +116,25 @@ The paywall sits **after** the scan. The scan always completes and the count is 
 honest; what you pay for is which clauses and why. Charging before the scan would be
 charging for something the reader has not yet been given a reason to want.
 
+Three things are given away on purpose, and each one costs a sale in the short run:
+
+- **The count, in full.** "11 of 16 clauses will cost you money" is the finding. Hiding
+  the number would raise conversion and would also make the app worthless to anyone who
+  declines, which is most people.
+- **The whole checklist.** "What Redline checks" lists all 27 rules, grouped, before a
+  single rupee changes hands. The counts are derived from the rule table in
+  [`Rules.kt`](app/src/main/java/dev/kesav/redline/Rules.kt), so the screen cannot
+  advertise a check the scanner does not run, and `TopicsTest` fails the build if the
+  two ever drift. A paywall in front of an unexplained judgement is the thing a reader
+  is right to distrust.
+- **The price, before the work.** It is on the first screen, read from the offering,
+  next to the line saying the text never leaves the phone. Learning the cost only after
+  reading a lease into the field is the shape of an ambush even when the number is small.
+
+What is left to sell is the part that took the work: which clause, what it says, and why
+it costs money. One payment, no subscription, because a tenant signs a lease roughly
+once a year and billing them monthly for that would be the actual dark pattern.
+
 ## Build
 
 Android SDK with platform 36, and a JDK 17 or newer.
