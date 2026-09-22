@@ -53,6 +53,17 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
+            // Observed, not documented: with a Test Store key in a non-debuggable
+            // build the SDK puts up a "Wrong API Key" dialog and closes the app. That
+            // is the right default, because RevenueCat's own guidance is never to
+            // submit a store build configured with a Test Store key.
+            //
+            // This app is never submitted to a store. It is installed as an APK and
+            // every purchase it can make is simulated, so the situation the guard
+            // exists to prevent cannot arise. Play also rejects debuggable artifacts,
+            // which is the same moment this and the key would both have to change.
+            isDebuggable = true
         }
     }
 
