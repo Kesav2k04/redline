@@ -7,11 +7,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed interface ScanState {
     data object Editing : ScanState
@@ -20,7 +22,10 @@ sealed interface ScanState {
         val clauseCount: Int,
         val findings: List<Finding>,
     ) : ScanState {
-        val flaggedClauses: Int get() = findings.map { it.clause.index }.distinct().size
+        // Computed once here rather than on every read. As getters these walked the
+        // findings list twice per recomposition of the results header, which is the one
+        // composable guaranteed to recompose while the list scrolls.
+        val flaggedClauses: Int = findings.map { it.clause.index }.distinct().size
 
         /**
          * Clauses carrying at least one costly finding, not the number of such findings.
@@ -30,7 +35,7 @@ sealed interface ScanState {
          * findings here made the screen read "11 of 16 clauses will cost you money, 13 of
          * them are worth arguing about", and 13 of 11 is not a thing.
          */
-        val highClauses: Int get() = findings
+        val highClauses: Int = findings
             .filter { it.severity == Severity.HIGH }
             .map { it.clause.index }
             .distinct()
@@ -114,28 +119,45 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun loadSample() {
-        val text = getApplication<Application>().assets
-            .open("sample_lease.txt")
-            .bufferedReader()
-            .use { it.readText() }
-
-        _ui.update { it.copy(text = text, state = ScanState.Editing) }
+        viewModelScope.launch {
+            val text = withContext(Dispatchers.IO) {
+                getApplication<Application>().assets
+                    .open("sample_lease.txt")
+                    .bufferedReader()
+                    .use { it.readText() }
+            }
+            _ui.update { it.copy(text = text, state = ScanState.Editing) }
+        }
     }
 
+    /**
+     * Splitting and matching happen off the main thread.
+     *
+     * The bundled sample is sixteen clauses and finishes in no time, which is exactly
+     * why this was easy to get wrong: the regex work scales with the length of the
+     * pasted text, and a real forty-page commercial lease is a different number. The
+     * cost of being right here is one dispatcher.
+     */
     fun scan() {
-        val clauses = ClauseSplitter.split(_ui.value.text)
-        // Severity first, then findings that name an actual figure. "Deposit equal to
-        // ten months rent" is a harder fact to argue with than "there is a lock-in
-        // period", and the top card is the one a reader sees before deciding.
-        val findings = Scanner.scan(clauses).sortedWith(
-            compareBy(
-                { it.severity.ordinal },
-                { if (it.headline.any(Char::isDigit)) 0 else 1 },
-                { it.clause.index },
-            )
-        )
-
-        _ui.update { it.copy(state = ScanState.Scanned(clauses.size, findings)) }
+        val text = _ui.value.text
+        viewModelScope.launch {
+            val scanned = withContext(Dispatchers.Default) {
+                val clauses = ClauseSplitter.split(text)
+                // Severity first, then findings that name an actual figure. "Deposit
+                // equal to ten months rent" is a harder fact to argue with than "there
+                // is a lock-in period", and the top card is the one a reader sees
+                // before deciding.
+                val findings = Scanner.scan(clauses).sortedWith(
+                    compareBy(
+                        { it.severity.ordinal },
+                        { if (it.headline.any(Char::isDigit)) 0 else 1 },
+                        { it.clause.index },
+                    )
+                )
+                ScanState.Scanned(clauses.size, findings)
+            }
+            _ui.update { it.copy(state = scanned) }
+        }
     }
 
     fun back() {
