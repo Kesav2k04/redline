@@ -16,6 +16,16 @@ object Report {
     /** Kept short. This travels into other people's inboxes. */
     const val SUBJECT = "Clauses in this lease worth raising"
 
+    /**
+     * Grouped by clause, not by finding.
+     *
+     * A single security-deposit paragraph routinely trips four rules: the size, the
+     * ninety-day wait, the missing interest and the landlord's sole discretion. Listed
+     * one finding at a time, that paragraph was quoted in full four times in a row and
+     * the message became unreadable at exactly the point it mattered. Grouping also
+     * happens to be how a person raises it: not "I have nineteen objections" but
+     * "clause four has four problems with it".
+     */
     fun build(state: ScanState.Scanned): String {
         if (state.findings.isEmpty()) {
             return buildString {
@@ -25,6 +35,10 @@ object Report {
             }.trim()
         }
 
+        // groupBy preserves first-appearance order, so the clause carrying the worst
+        // finding stays at the top, the same order the screen showed.
+        val byClause = state.findings.groupBy { it.clause.index }
+
         return buildString {
             appendLine(
                 "Redline read ${state.clauseCount} clauses in this lease. " +
@@ -32,15 +46,14 @@ object Report {
             )
             appendLine()
 
-            state.findings.forEachIndexed { i, f ->
-                appendLine("${i + 1}. ${label(f.severity)}  ${f.headline}")
-                appendLine("   ${f.reason}")
+            byClause.values.forEachIndexed { i, group ->
+                appendLine("${i + 1}) ${collapse(group.first().clause.text)}")
                 appendLine()
-                // The clause itself, because a landlord will ask which sentence this is
-                // about and paraphrasing it invites an argument about the paraphrase.
-                appendLine("   Clause as written:")
-                appendLine("   ${collapse(f.clause.text)}")
-                appendLine()
+                for (f in group) {
+                    appendLine("   ${label(f.severity)}  ${f.headline}")
+                    appendLine("   ${f.reason}")
+                    appendLine()
+                }
             }
 
             appendLine(DISCLAIMER)

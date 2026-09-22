@@ -40,6 +40,7 @@ class ReportTest {
             "hard wrapping survived into the message",
             text.contains("4. Security deposit. The Tenant shall deposit ten months rent."),
         )
+        assertFalse("the raw newlines leaked through", text.contains("deposit.\nThe Tenant"))
     }
 
     @Test
@@ -70,10 +71,35 @@ class ReportTest {
     }
 
     @Test
-    fun `findings are numbered from one`() {
+    fun `the message is numbered by clause, not by finding`() {
         val state = sample()
         val text = Report.build(state)
-        assertTrue(text.contains("1. COSTLY  ${state.findings.first().headline}"))
-        assertEquals(state.findings.size, Regex("(?m)^\\d+\\. (COSTLY|WORTH CHECKING)  ").findAll(text).count())
+        val groups = Regex("(?m)^\\d+\\) ").findAll(text).count()
+        assertEquals(
+            "one numbered group per flagged clause",
+            state.flaggedClauses,
+            groups,
+        )
+        assertTrue("more findings than groups is the whole point", state.findings.size > groups)
+    }
+
+    @Test
+    fun `a clause with several findings is quoted once, not once per finding`() {
+        val text = Report.build(sample())
+        val deposit = "4. Security deposit. The Tenant shall deposit a sum equivalent to ten months rent"
+        assertEquals(
+            "the deposit paragraph was repeated in the message",
+            1,
+            Regex(Regex.escape(deposit)).findAll(text).count(),
+        )
+    }
+
+    @Test
+    fun `every finding on a shared clause still reaches the message`() {
+        val state = sample()
+        val text = Report.build(state)
+        val onDeposit = state.findings.filter { it.clause.text.contains("Security deposit") }
+        assertTrue("fixture no longer has a multi-finding clause", onDeposit.size >= 3)
+        for (f in onDeposit) assertTrue("dropped: ${f.headline}", text.contains(f.headline))
     }
 }
