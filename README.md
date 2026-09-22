@@ -67,6 +67,39 @@ passes turns it into a training clause.
 This is why the app says **"no rule matched"** and never "this lease is clean". Rules
 catch what they were written to catch, and when they miss they say nothing.
 
+### What those numbers were quietly hiding
+
+20 of 20 and 10 of 10 was believed for longer than it deserved. The benign half of that
+corpus was ten benign *lease* clauses. Nothing in it asked what the scanner does with
+text that is not a lease, which is close to the first thing a stranger with the app open
+will try.
+
+It did something embarrassing. Four off-topic documents were run through it and every one
+tripped a rule:
+
+| Pasted in | What it said |
+|---|---|
+| A recipe | "The landlord alone decides what to deduct" |
+| A privacy policy | "Staying on counts as agreeing" |
+| An employment offer | "Leaving early still costs you the rest of the term" |
+| A news story about parking charges | "Another occupant raises the rent by 10 percent" |
+
+Several rules match ordinary commercial English. "At its sole discretion" is in every
+employment offer written; "continued use constitutes acceptance" is in every privacy
+policy.
+
+The rules were not narrowed, because they are right about leases and bending them to
+dodge a recipe would cost real catches. The document is checked instead, once, in
+[`LeaseCheck.kt`](app/src/main/java/dev/kesav/redline/LeaseCheck.kt): a tenancy agreement
+that never says tenant, landlord, lease, rent or premises does not exist. Two distinct
+terms are required, which is loose enough to accept a single clause shared in from
+another app and tight enough to reject all four documents above.
+
+When the check fails the app says so, shows what matched anyway so the claim can be
+checked, and **does not offer to sell anything**. `OffTopicTest` pins all of it, including
+an assertion that those four documents still trip rules, so the day the check stops
+earning its place the test says so rather than going quietly green.
+
 ## Verify the monetization in 60 seconds
 
 - Entitlement identifier: `full_report`, declared once in
