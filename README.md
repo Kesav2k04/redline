@@ -7,7 +7,7 @@ paste the lease or share it from whatever app it arrived in, and the text never 
 the phone.
 
 <p>
-  <img src="docs/locked.png" alt="Results screen. Eleven of sixteen clauses flagged, the first finding readable in full, the rest redacted behind a one-time purchase." width="46%">
+  <img src="docs/locked.png" alt="Results screen. Eleven of sixteen clauses flagged, the first clause readable in full, the rest redacted behind a one-time purchase." width="46%">
   <img src="docs/unlocked.png" alt="The same screen after purchase. Every finding readable, with a button to send the list onward." width="46%">
 </p>
 

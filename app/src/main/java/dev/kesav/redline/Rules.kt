@@ -19,6 +19,15 @@ data class Finding(
  */
 private class Pattern(
     val id: String,
+    /**
+     * The heading this rule appears under when the app discloses what it checks.
+     *
+     * It lives on the rule rather than in a hand-written list on the screen, because a
+     * hand-written list is a second copy of the truth and second copies go stale the
+     * first time a rule is added. [Scanner.topics] derives the disclosure from this, and
+     * [TopicsTest] pins that the disclosed total still equals the number of rules.
+     */
+    val topic: String,
     val severity: Severity,
     val all: List<Regex>,
     val none: List<Regex> = emptyList(),
@@ -62,9 +71,21 @@ private val PERCENT = Regex("percent")
 private val DAYS = Regex("days?")
 private val MONTHS = Regex("months?")
 
+private val TOPIC_ORDER = listOf(
+    "Your deposit",
+    "Paying late",
+    "Rent going up",
+    "What you pay for",
+    "Who decides",
+    "Access to your home",
+    "Leaving early",
+    "Renewal and notices",
+    "Moving out",
+)
+
 private val patterns = listOf(
     Pattern(
-        id = "late-fee", severity = Severity.HIGH,
+        id = "late-fee", topic = "Paying late", severity = Severity.HIGH,
         all = listOf(Regex("unpaid|overdue|default|delay|late")),
         unit = PERCENT, atLeast = 3,
         headline = { "Late payment penalty of $it percent" },
@@ -72,20 +93,20 @@ private val patterns = listOf(
             "ceiling in residential agreements.",
     ),
     Pattern(
-        id = "interest-rate", severity = Severity.HIGH,
+        id = "interest-rate", topic = "Paying late", severity = Severity.HIGH,
         all = listOf(Regex("interest"), Regex("per annum|annually")),
         unit = PERCENT, atLeast = 12,
         headline = { "Interest charged at $it percent a year" },
         reason = "That is above what a bank charges on an unsecured loan.",
     ),
     Pattern(
-        id = "dishonour-fee", severity = Severity.MEDIUM,
+        id = "dishonour-fee", topic = "Paying late", severity = Severity.MEDIUM,
         all = listOf(Regex("dishonour|dishonor|bounce|returned unpaid"), Regex("cheque|check")),
         headline = { "A fee applies if a payment is returned" },
         reason = "Compare it against what your bank charges you for the same event.",
     ),
     Pattern(
-        id = "deposit-size", severity = Severity.HIGH,
+        id = "deposit-size", topic = "Your deposit", severity = Severity.HIGH,
         all = listOf(Regex("deposit")),
         unit = MONTHS, atLeast = 4, near = Regex("(?i)deposit"),
         headline = { "Deposit equal to $it months rent" },
@@ -93,32 +114,32 @@ private val patterns = listOf(
             "money you cannot touch for the whole term.",
     ),
     Pattern(
-        id = "deposit-no-interest", severity = Severity.MEDIUM,
+        id = "deposit-no-interest", topic = "Your deposit", severity = Severity.MEDIUM,
         all = listOf(Regex("deposit"), Regex("interest free|not carry interest|without interest")),
         headline = { "The deposit earns you nothing" },
         reason = "The landlord holds a large sum for the full term and keeps any return on it.",
     ),
     Pattern(
-        id = "deposit-refund-delay", severity = Severity.HIGH,
+        id = "deposit-refund-delay", topic = "Your deposit", severity = Severity.HIGH,
         all = listOf(Regex("deposit|refund"), Regex("vacat|hand.{0,3}over|quit")),
         unit = DAYS, atLeast = 31,
         headline = { "Deposit returned only after $it days" },
         reason = "You will have paid a deposit on your next home long before this one comes back.",
     ),
     Pattern(
-        id = "sole-discretion", severity = Severity.HIGH,
+        id = "sole-discretion", topic = "Who decides", severity = Severity.HIGH,
         all = listOf(Regex("sole discretion|absolute discretion")),
         headline = { "The landlord alone decides what to deduct" },
         reason = "Sole discretion means the amount is not open to challenge on its merits.",
     ),
     Pattern(
-        id = "forfeiture", severity = Severity.HIGH,
+        id = "forfeiture", topic = "Who decides", severity = Severity.HIGH,
         all = listOf(Regex("forfeit")),
         headline = { "Money can be forfeited outright" },
         reason = "Forfeiture is a penalty, not compensation for a loss anyone has to prove.",
     ),
     Pattern(
-        id = "tenant-structural-repairs", severity = Severity.HIGH,
+        id = "tenant-structural-repairs", topic = "What you pay for", severity = Severity.HIGH,
         all = listOf(
             Regex("repair|structur"),
             Regex("tenant"),
@@ -128,51 +149,51 @@ private val patterns = listOf(
         reason = "Structural upkeep usually stays with the owner, because it is their asset.",
     ),
     Pattern(
-        id = "no-setoff", severity = Severity.HIGH,
+        id = "no-setoff", topic = "What you pay for", severity = Severity.HIGH,
         all = listOf(Regex("set off|set-off|setoff"), Regex("rent")),
         headline = { "You cannot deduct what you spend from the rent" },
         reason = "In effect you pay twice: once for the repair, once for the full rent.",
     ),
     Pattern(
-        id = "lock-in", severity = Severity.HIGH,
+        id = "lock-in", topic = "Leaving early", severity = Severity.HIGH,
         all = listOf(Regex("lock.?in")),
         headline = { "There is a lock-in period" },
         reason = "Leaving during a lock-in usually means paying for months you do not live there.",
     ),
     Pattern(
-        id = "unexpired-liability", severity = Severity.HIGH,
+        id = "unexpired-liability", topic = "Leaving early", severity = Severity.HIGH,
         all = listOf(Regex("unexpired|remainder of the term|balance of the term")),
         headline = { "Leaving early still costs you the rest of the term" },
         reason = "That can be many months of rent for a home you have already left.",
     ),
     Pattern(
-        id = "long-notice", severity = Severity.MEDIUM,
+        id = "long-notice", topic = "Leaving early", severity = Severity.MEDIUM,
         all = listOf(Regex("notice"), Regex("tenant|vacat|terminat")),
         unit = MONTHS, atLeast = 3,
         headline = { "You must give $it months notice to leave" },
         reason = "One or two months is the common term. Longer than that ties you in.",
     ),
     Pattern(
-        id = "liquidated-damages", severity = Severity.HIGH,
+        id = "liquidated-damages", topic = "Leaving early", severity = Severity.HIGH,
         all = listOf(Regex("liquidated damages")),
         headline = { "A fixed sum is payable as damages" },
         reason = "It is charged whether or not the landlord actually loses that much.",
     ),
     Pattern(
-        id = "rent-escalation", severity = Severity.MEDIUM,
+        id = "rent-escalation", topic = "Rent going up", severity = Severity.MEDIUM,
         all = listOf(Regex("enhanc|escalat|increas|revis"), Regex("rent")),
         unit = PERCENT, atLeast = 6,
         headline = { "Rent rises by $it percent" },
         reason = "Compare that against what rents in the area are actually doing.",
     ),
     Pattern(
-        id = "unilateral-revision", severity = Severity.HIGH,
+        id = "unilateral-revision", topic = "Rent going up", severity = Severity.HIGH,
         all = listOf(Regex("revise the rent|revision of rent|alter the rent"), Regex("at any time")),
         headline = { "The landlord can raise the rent at any time" },
         reason = "A rent you cannot plan around is not a fixed rent.",
     ),
     Pattern(
-        id = "silence-is-consent", severity = Severity.HIGH,
+        id = "silence-is-consent", topic = "Who decides", severity = Severity.HIGH,
         all = listOf(
             Regex("continued occupation|continued use|continued possession"),
             Regex("acceptance|accepted|consent"),
@@ -181,50 +202,50 @@ private val patterns = listOf(
         reason = "You would have to move out in order to refuse the new terms.",
     ),
     Pattern(
-        id = "entry-without-notice", severity = Severity.HIGH,
+        id = "entry-without-notice", topic = "Access to your home", severity = Severity.HIGH,
         all = listOf(Regex("enter|entry|inspect"), Regex("without prior notice|without notice")),
         headline = { "The landlord may enter without telling you" },
         reason = "Notice before entry is the normal protection for a home.",
     ),
     Pattern(
-        id = "showings", severity = Severity.MEDIUM,
+        id = "showings", topic = "Access to your home", severity = Severity.MEDIUM,
         all = listOf(Regex("prospective tenant|prospective purchaser|show the premises")),
         headline = { "Strangers may be shown round while you live there" },
         reason = "Check the hours, and whether you get any notice.",
     ),
     Pattern(
-        id = "occupant-surcharge", severity = Severity.MEDIUM,
+        id = "occupant-surcharge", topic = "Access to your home", severity = Severity.MEDIUM,
         all = listOf(Regex("occupant|reside|person other than")),
         unit = PERCENT, atLeast = 5,
         headline = { "Another occupant raises the rent by $it percent" },
         reason = "A guest who stays too long can become a rent increase.",
     ),
     Pattern(
-        id = "auto-renewal", severity = Severity.HIGH,
+        id = "auto-renewal", topic = "Renewal and notices", severity = Severity.HIGH,
         all = listOf(Regex("automatically renew|stand renewed|deemed renewed|renewed for a further")),
         headline = { "The agreement renews itself" },
         reason = "Missing the notice window binds you for another full term.",
     ),
     Pattern(
-        id = "deemed-service", severity = Severity.HIGH,
+        id = "deemed-service", topic = "Renewal and notices", severity = Severity.HIGH,
         all = listOf(Regex("deemed to have been served|deemed to have been delivered")),
         headline = { "A notice counts as delivered even if it never arrives" },
         reason = "You can miss a deadline nobody actually told you about.",
     ),
     Pattern(
-        id = "tenant-pays-tax", severity = Severity.HIGH,
+        id = "tenant-pays-tax", topic = "What you pay for", severity = Severity.HIGH,
         all = listOf(Regex("municipal tax|property tax|corporation tax"), Regex("tenant|bear|outgoing")),
         headline = { "Property taxes are passed to you" },
         reason = "Tax on the owner's asset is normally the owner's cost.",
     ),
     Pattern(
-        id = "future-levies", severity = Severity.HIGH,
+        id = "future-levies", topic = "What you pay for", severity = Severity.HIGH,
         all = listOf(Regex("hereafter imposed|any levy|future levies")),
         headline = { "Charges that do not exist yet are yours too" },
         reason = "This is an open-ended promise to pay an unknown amount.",
     ),
     Pattern(
-        id = "charge-increases", severity = Severity.MEDIUM,
+        id = "charge-increases", topic = "Rent going up", severity = Severity.MEDIUM,
         all = listOf(
             Regex("increase"),
             Regex("maintenance|society|association"),
@@ -234,21 +255,37 @@ private val patterns = listOf(
         reason = "The rent stays the same while your total outgoing does not.",
     ),
     Pattern(
-        id = "mandatory-repaint", severity = Severity.MEDIUM,
+        id = "mandatory-repaint", topic = "Moving out", severity = Severity.MEDIUM,
         all = listOf(Regex("repaint|repainting")),
         headline = { "Repainting is charged to you on the way out" },
         reason = "Look for whether it applies regardless of the actual condition.",
     ),
     Pattern(
-        id = "restore-original", severity = Severity.MEDIUM,
+        id = "restore-original", topic = "Moving out", severity = Severity.MEDIUM,
         all = listOf(Regex("restore|reinstate"), Regex("original condition|same condition")),
         headline = { "You must put the place back as it was" },
         reason = "Normal wear over a long tenancy can make that expensive.",
     ),
 )
 
+/** One heading in the disclosure, and how many rules sit under it. */
+data class RuleTopic(val name: String, val ruleCount: Int)
+
 object Scanner {
     val ruleCount: Int get() = patterns.size
+
+    /**
+     * What the app checks, grouped for reading.
+     *
+     * A paywall in front of an unexplained judgement is the thing a reader is right to
+     * distrust, and this app spent the whole results screen asking for money before it
+     * ever said what it looks for. The list is derived from the rules themselves, so it
+     * cannot claim a check the scanner does not perform.
+     */
+    val topics: List<RuleTopic> by lazy {
+        val counts = patterns.groupingBy { it.topic }.eachCount()
+        TOPIC_ORDER.filter { counts.containsKey(it) }.map { RuleTopic(it, counts.getValue(it)) }
+    }
 
     fun scan(clauses: List<Clause>): List<Finding> =
         clauses.flatMap { clause -> patterns.mapNotNull { it.check(clause) } }

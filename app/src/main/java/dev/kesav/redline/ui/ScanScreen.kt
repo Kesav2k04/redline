@@ -32,6 +32,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -41,7 +43,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +65,7 @@ import android.app.Activity
 import android.content.ContextWrapper
 import android.content.Intent
 import dev.kesav.redline.ClauseGroup
+import dev.kesav.redline.Scanner
 import dev.kesav.redline.Finding
 import dev.kesav.redline.Report
 import dev.kesav.redline.R
@@ -78,6 +83,11 @@ fun ScanScreen(
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val snackbar = remember { SnackbarHostState() }
+
+    // Reachable from both screens, because the two questions it answers arrive at
+    // different moments: "why would I paste my lease into this" before the scan, and
+    // "where did eleven come from" after it.
+    var showChecks by remember { mutableStateOf(false) }
 
     // Without this, a back swipe on the results screen finishes the activity and closes
     // the app. The reader's own lease is still in the text field behind it, so the app
@@ -103,6 +113,7 @@ fun ScanScreen(
                 onText = viewModel::edit,
                 onScan = viewModel::scan,
                 onSample = viewModel::loadSample,
+                onChecks = { showChecks = true },
                 modifier = Modifier.padding(padding),
             )
 
@@ -116,7 +127,71 @@ fun ScanScreen(
                 onRestore = viewModel::restore,
                 onBack = viewModel::back,
                 onShare = { context.startActivity(shareReport(state)) },
+                onChecks = { showChecks = true },
                 modifier = Modifier.padding(padding),
+            )
+        }
+
+        if (showChecks) {
+            ChecksSheet(onDismiss = { showChecks = false })
+        }
+    }
+}
+
+/**
+ * What the app looks for, written down where the reader can see it before paying.
+ *
+ * A scan that returns a number and a price, without ever saying what it examined, asks
+ * for trust it has not earned. The counts come from the rule table rather than from a
+ * hand-written list, so the app cannot advertise a check it does not perform.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChecksSheet(onDismiss: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Redline checks ${Scanner.ruleCount} things",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "Each one looks for a specific term and, where there is a number, " +
+                    "reads the number and compares it.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            for (topic in Scanner.topics) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(topic.name, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = if (topic.ruleCount == 1) "1 check" else "${topic.ruleCount} checks",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text(
+                text = "That is the whole list. A clause that matches none of it is not " +
+                    "flagged, which is not the same as the clause being fair.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -128,6 +203,7 @@ private fun Editor(
     onText: (String) -> Unit,
     onScan: () -> Unit,
     onSample: () -> Unit,
+    onChecks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Three things this column has to survive: a keyboard covering the lower half, a
@@ -181,6 +257,10 @@ private fun Editor(
         TextButton(onClick = onSample, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("Try it on a sample lease")
         }
+
+        TextButton(onClick = onChecks, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("What Redline checks")
+        }
     }
 }
 
@@ -227,6 +307,7 @@ private fun Results(
     onRestore: () -> Unit,
     onBack: () -> Unit,
     onShare: () -> Unit,
+    onChecks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val flagged = state.flaggedClauses
@@ -264,6 +345,19 @@ private fun Results(
             itemsIndexed(state.groups) { index, group ->
                 // The first one is shown in full so the rest are a known quantity.
                 ClauseCard(group, revealed = unlocked || index == 0, row = index)
+            }
+
+            // At the foot rather than in the pinned bar. Someone who has scrolled past
+            // a column of locked cards to get here is exactly the person asking what
+            // the number is based on, and the bar already carries the two buttons that
+            // matter more.
+            item {
+                TextButton(
+                    onClick = onChecks,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                    Text("What Redline checks, all ${Scanner.ruleCount} of them")
+                }
             }
         }
 
