@@ -2,9 +2,11 @@ package dev.kesav.redline
 
 import android.app.Activity
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.revenuecat.purchases.Package
+import com.revenuecat.purchases.PackageType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +21,20 @@ sealed interface ScanState {
         val findings: List<Finding>,
     ) : ScanState {
         val flaggedClauses: Int get() = findings.map { it.clause.index }.distinct().size
-        val high: Int get() = findings.count { it.severity == Severity.HIGH }
+
+        /**
+         * Clauses carrying at least one costly finding, not the number of such findings.
+         *
+         * One clause routinely trips several rules: a deposit of ten months rent that is
+         * also returned only after ninety days is two findings on one sentence. Counting
+         * findings here made the screen read "11 of 16 clauses will cost you money, 13 of
+         * them are worth arguing about", and 13 of 11 is not a thing.
+         */
+        val highClauses: Int get() = findings
+            .filter { it.severity == Severity.HIGH }
+            .map { it.clause.index }
+            .distinct()
+            .size
     }
 }
 
@@ -27,10 +42,27 @@ data class ScanUi(
     val text: String = "",
     val state: ScanState = ScanState.Editing,
     val unlocked: Boolean = false,
+    /** False until the first entitlement read lands. Distinct from `unlocked == false`. */
+    val entitlementsKnown: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
     val offer: Package? = null,
 )
+
+/**
+ * Which package the button sells.
+ *
+ * Reading the first available package would work today and break silently later:
+ * the list is in dashboard order, so reordering the offering, or a product failing to
+ * resolve and dropping out, would slide a subscription into that slot. The app would
+ * then offer a recurring charge to somebody reading one lease, and nothing in the code
+ * would have changed.
+ *
+ * So the choice is made by type, and there is deliberately no fallback. Selling the
+ * wrong thing is worse than selling nothing, and the caller already handles null.
+ */
+internal fun chooseOffer(types: List<PackageType>): Int? =
+    types.indexOf(PackageType.LIFETIME).takeIf { it >= 0 }
 
 class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -38,8 +70,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     val ui: StateFlow<ScanUi> = _ui.asStateFlow()
 
     init {
-        // Entitlement is read before anything is drawn, so a paid report is never
-        // shown and then taken away.
+        // Reading the entitlement is a network call, so it lands after the first frame.
+        // The screen waits on `entitlementsKnown` rather than assuming that a false
+        // `unlocked` means the reader has not paid.
         viewModelScope.launch {
             Billing.refresh()
             Billing.loadOffering()
@@ -48,8 +81,25 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
             Billing.unlocked.collect { unlocked -> _ui.update { it.copy(unlocked = unlocked) } }
         }
         viewModelScope.launch {
+            Billing.known.collect { known -> _ui.update { it.copy(entitlementsKnown = known) } }
+        }
+        viewModelScope.launch {
             Billing.offering.collect { offering ->
-                _ui.update { it.copy(offer = offering?.availablePackages?.firstOrNull()) }
+                val packages = offering?.availablePackages.orEmpty()
+                val offer = chooseOffer(packages.map { it.packageType })?.let(packages::getOrNull)
+
+                // A package built from a custom identifier reports CUSTOM whatever it
+                // sells, so a mis-set dashboard shows up here as a button with no price
+                // rather than as an error. Name the types so the cause is readable.
+                if (offer == null && packages.isNotEmpty()) {
+                    Log.w(
+                        "Billing",
+                        "No one-time package in the offering. Types: " +
+                            packages.joinToString { it.packageType.name },
+                    )
+                }
+
+                _ui.update { it.copy(offer = offer) }
             }
         }
     }

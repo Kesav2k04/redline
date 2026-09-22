@@ -44,6 +44,16 @@ object Billing {
     private val _offering = MutableStateFlow<Offering?>(null)
     val offering: StateFlow<Offering?> = _offering.asStateFlow()
 
+    /**
+     * False until the first entitlement read has finished, whatever it found.
+     *
+     * Without this there is no way to tell "not entitled" from "not asked yet", and the
+     * report would draw itself redacted with a buy button and then rearrange under the
+     * reader a second later.
+     */
+    private val _known = MutableStateFlow(false)
+    val known: StateFlow<Boolean> = _known.asStateFlow()
+
     /** False when no key is configured, so a clean clone still builds and runs. */
     var configured: Boolean = false
         private set
@@ -93,14 +103,19 @@ object Billing {
     }
 
     /**
-     * Reads entitlement state before anything is drawn, so the report is never shown
-     * and then snatched back.
+     * Reads entitlement state. This is a network call, so it finishes after the first
+     * frame is already on screen; [known] is what the UI waits on rather than guessing
+     * from [unlocked] alone.
      */
     suspend fun refresh() {
-        if (!configured) return
+        if (!configured) {
+            _known.value = true
+            return
+        }
         runCatching { Purchases.sharedInstance.awaitCustomerInfo() }
             .onSuccess { apply(it) }
             .onFailure { Log.w(TAG, "Could not read entitlements: ${it.message}") }
+        _known.value = true
     }
 
     suspend fun loadOffering() {
@@ -136,6 +151,15 @@ object Billing {
 
         return runCatching {
             apply(Purchases.sharedInstance.awaitRestore())
+
+            // awaitRestore replays purchase history from the store, and a store can
+            // answer truthfully with nothing while the entitlement is already attached
+            // to this user. Telling an entitled buyer they own nothing is the worst
+            // outcome available here, so ask the other question before saying it.
+            if (!_unlocked.value) {
+                runCatching { Purchases.sharedInstance.awaitCustomerInfo() }.onSuccess(::apply)
+            }
+
             if (_unlocked.value) null else "Nothing to restore on this account."
         }.getOrElse { it.message ?: "Restore did not complete." }
     }

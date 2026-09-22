@@ -89,6 +89,7 @@ fun ScanScreen(
             is ScanState.Scanned -> Results(
                 state = state,
                 unlocked = ui.unlocked,
+                known = ui.entitlementsKnown,
                 busy = ui.busy,
                 price = ui.offer?.product?.price?.formatted,
                 onUnlock = { activity?.let(viewModel::buy) },
@@ -162,6 +163,7 @@ private fun android.content.Context.findActivity(): Activity? {
 private fun Results(
     state: ScanState.Scanned,
     unlocked: Boolean,
+    known: Boolean,
     busy: Boolean,
     price: String?,
     onUnlock: () -> Unit,
@@ -187,7 +189,7 @@ private fun Results(
                 text = if (flagged == 0) {
                     "No rule matched this text. That is not the same as a clean lease."
                 } else {
-                    "${state.high} of them are worth arguing about before you sign."
+                    "${state.highClauses} of them are worth arguing about before you sign."
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -203,25 +205,41 @@ private fun Results(
                 FindingCard(finding, revealed = unlocked || index == 0)
             }
 
+            // Drawn from the first frame and merely disabled until the entitlement read
+            // lands. Deciding on `unlocked` alone would show this block, then delete it
+            // a moment later on a reader who had already paid, and the list would jump
+            // under their thumb.
             if (!unlocked && state.findings.size > 1) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Button(
                             onClick = onUnlock,
-                            enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            enabled = known && !busy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .semantics {
+                                    if (busy) contentDescription = "Completing your purchase"
+                                },
                         ) {
                             if (busy) {
-                                CircularProgressIndicator(Modifier.height(18.dp))
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
                             } else {
+                                // "findings", not a bare number. The heading counts
+                                // clauses and this counts findings, and without the noun
+                                // the two numbers read as a contradiction.
                                 Text(
-                                    "Show the other ${state.findings.size - 1}" +
+                                    "Show the other ${state.findings.size - 1} findings" +
                                         (price?.let { " for $it" } ?: "")
                                 )
                             }
                         }
                         TextButton(
                             onClick = onRestore,
+                            enabled = known && !busy,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         ) {
                             Text("Already bought it? Restore")

@@ -40,6 +40,21 @@ class PurchaseIdTest {
         assertTrue("expected lowercase hex only", id.all { it in "0123456789abcdef" })
     }
 
+    /**
+     * The other tests only compare the function against itself inside one process, so
+     * changing the salt or the truncation length would keep them all green while every
+     * existing buyer silently lost their purchase. This pins the actual bytes.
+     *
+     * If this fails, the identifier changed, and that is a migration, not a refactor.
+     */
+    @Test
+    fun `the mapping itself is frozen`() {
+        assertEquals(
+            "b6c920505644bd9bbdb56d94b61378b6",
+            Billing.purchaseId("a1b2c3d4e5f60718"),
+        )
+    }
+
     @Test
     fun `a missing or useless device value falls back to anonymous`() {
         assertNull(Billing.purchaseId(null))
