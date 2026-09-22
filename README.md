@@ -103,6 +103,23 @@ checked, and **does not offer to sell anything**. `OffTopicTest` pins all of it,
 an assertion that those four documents still trip rules, so the day the check stops
 earning its place the test says so rather than going quietly green.
 
+The second thing the corpus hid was inside real leases, and it was worse, because a lease
+passes the check above and the false headline then sits behind the paywall. No trigger
+word had a word boundary, and six of the seven rules that read a number took the first
+one in the clause. So "the rent shall be escalated by ten percent" came out as *Late
+payment penalty of 10 percent*: "late" sits inside "escalated", and the only percentage
+in the clause was read as the fee. "Residential" became a second occupant. An
+eleven-month term became a notice period.
+
+Every trigger now starts on a word boundary, and every rule that reads a number takes the
+one nearest a required anchor word, within a reach set per rule. A late fee has to sit
+within forty characters of *charge*, *fee*, *penalty* or *interest*; a notice period
+within forty of *notice*. [`AdversarialTest`](app/src/test/java/dev/kesav/redline/AdversarialTest.kt)
+holds the clauses built to break it, including one with two percentages where the late
+fee must come out as 4 and not 10, beside six plain clauses that must still fire. The
+frozen corpus scores the same 20 of 20 and 10 of 10 afterwards, which says less about
+the fix than it does about the corpus.
+
 ## Verify the monetization in 60 seconds
 
 - Entitlement identifier: `full_report`, declared once in
