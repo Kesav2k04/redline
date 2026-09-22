@@ -16,3 +16,4 @@ app/src/main/assets/*.task
 *.log
 eval/models/
 .venv/
+Python/
