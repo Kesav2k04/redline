@@ -36,6 +36,14 @@ sealed interface ScanState {
     data class Scanned(
         val clauseCount: Int,
         val findings: List<Finding>,
+        /**
+         * False when the text does not read like a tenancy agreement.
+         *
+         * The findings are still shown, because refusing to show them would hide the
+         * evidence for the claim, but they are shown free and under a warning. Taking
+         * money for a scan of a recipe is not a thing this app should be able to do.
+         */
+        val looksLikeLease: Boolean = true,
     ) : ScanState {
         /**
          * The findings, one entry per clause, in the order the findings were sorted.
@@ -179,7 +187,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                         { it.clause.index },
                     )
                 )
-                ScanState.Scanned(clauses.size, findings)
+                ScanState.Scanned(clauses.size, findings, LeaseCheck.looksLikeLease(text))
             }
             _ui.update { it.copy(state = scanned) }
         }

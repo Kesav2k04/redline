@@ -322,20 +322,22 @@ private fun Results(
     Column(modifier = modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
             Text(
-                text = if (flagged == 0) {
-                    "Nothing matched"
-                } else {
-                    "$flagged of ${state.clauseCount} clauses will cost you money"
+                text = when {
+                    flagged == 0 -> "Nothing matched"
+                    !state.looksLikeLease -> "This does not read like a lease"
+                    else -> "$flagged of ${state.clauseCount} clauses will cost you money"
                 },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                text = if (flagged == 0) {
-                    "No rule matched this text. That is not the same as a clean lease."
-                } else {
-                    severitySplit(state.highClauses, flagged)
+                text = when {
+                    flagged == 0 -> "No rule matched this text. That is not the same as a clean lease."
+                    !state.looksLikeLease ->
+                        if (flagged == 1) "One match below, shown free. Read on for why."
+                        else "$flagged matches below, shown free. Read on for why."
+                    else -> severitySplit(state.highClauses, flagged)
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -349,9 +351,18 @@ private fun Results(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (!state.looksLikeLease) {
+                item { NotALeaseNotice() }
+            }
+
             itemsIndexed(state.groups) { index, group ->
                 // The first one is shown in full so the rest are a known quantity.
-                ClauseCard(group, revealed = unlocked || index == 0, row = index)
+                // Nothing is redacted when nothing is for sale.
+                ClauseCard(
+                    group,
+                    revealed = unlocked || !state.looksLikeLease || index == 0,
+                    row = index,
+                )
             }
 
             // At the foot rather than in the pinned bar. Someone who has scrolled past
@@ -376,7 +387,11 @@ private fun Results(
         // It is drawn from the first frame and merely disabled until the entitlement
         // read lands. Deciding on `unlocked` alone would show the bar and then remove it
         // a moment later on a reader who had already paid.
-        if (!unlocked && state.findings.size > 1) {
+        // Never offered over text that is not a lease. The findings are shown in full
+        // and free in that case, so there is nothing behind a paywall to sell, and a
+        // paywall over a scan of somebody's recipe is the single worst thing this app
+        // could be caught doing.
+        if (!unlocked && state.looksLikeLease && state.findings.size > 1) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -427,6 +442,19 @@ private fun Results(
                     ) {
                         Text("Edit text")
                     }
+                }
+            }
+        } else if (state.findings.isNotEmpty() && !state.looksLikeLease) {
+            // No share button here. The exported report opens "Redline read 4 clauses in
+            // this lease", and sending that about a document which is not a lease puts
+            // the app's mistake in someone else's inbox with the app's name on it.
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("Edit text")
                 }
             }
         } else if (state.findings.isNotEmpty()) {
@@ -511,6 +539,42 @@ internal fun severitySplit(high: Int, flagged: Int): String = when {
     high == flagged -> "All $flagged are marked costly."
     high == 0 -> "None is marked costly, but all $flagged are worth checking."
     else -> "$high marked costly, ${flagged - high} worth checking."
+}
+
+/**
+ * Shown above the findings when the text does not read like a tenancy agreement.
+ *
+ * It says what matched and why that is not the same as the document being a problem,
+ * because several of these rules match ordinary commercial English. "At its sole
+ * discretion" is in every employment offer written.
+ */
+@Composable
+private fun NotALeaseNotice() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Redline only knows tenancy agreements",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "This text never says tenant, landlord, lease, rent or premises, " +
+                    "so it is probably not one. Some of the rules below match ordinary " +
+                    "contract language and will fire on almost any document. Nothing " +
+                    "here is charged for, and none of it should be relied on.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable
