@@ -66,6 +66,11 @@ catch what they were written to catch, and when they miss they say nothing.
   the report renders**, so a paid result is never shown and then withdrawn.
 - The price on the button comes from the offering, not from a string in the code.
 - Cancelled purchases are not treated as errors.
+- The button sells a named package type, never `availablePackages.first()`. Reordering the
+  offering in the dashboard, or a product failing to resolve and dropping out, would
+  otherwise slide a subscription into that slot and quietly offer a recurring charge to
+  somebody reading one lease. `chooseOffer` picks `LIFETIME` by type and has no fallback,
+  because selling the wrong thing is worse than selling nothing.
 - `Billing.restore()` implements restore on reinstall, and it actually works after one.
   There are no accounts here, so the purchase is keyed to a SHA-256 hash of `ANDROID_ID`,
   which is scoped to the signing key and outlives the app's own storage. Automatic device
@@ -75,6 +80,23 @@ catch what they were written to catch, and when they miss they say nothing.
 - No key in the repository. `BuildConfig.REVENUECAT_API_KEY` is read from
   `local.properties`, which is not committed. With no key the app still builds, runs and
   scans, with the paywall locked.
+
+### What was actually run
+
+On the release-signed APK, not a debug build. That distinction matters here: `ANDROID_ID`
+is scoped to the signing key, so debug and release are two different customers and a
+result from one proves nothing about the other.
+
+| Step | Result |
+|---|---|
+| Offering resolves, live price on the button | yes |
+| Purchase declined at the store | stays locked, button re-enables, reason shown |
+| Purchase completed | every finding reveals, call to action removed |
+| Uninstall, reinstall, scan again | unlocked with no tap and no second purchase |
+
+The last row is the one worth reading. A full uninstall takes every local file with it,
+so nothing but the derived app user id carries the purchase across, and the report came
+back on its own.
 
 The paywall sits **after** the scan. The scan always completes and the count is always
 honest; what you pay for is which clauses and why. Charging before the scan would be
