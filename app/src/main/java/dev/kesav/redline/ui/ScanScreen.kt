@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -108,6 +110,14 @@ fun ScanScreen(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
+        // Capped and centred so a landscape phone, a tablet or an unfolded foldable does
+        // not stretch clause text to 150 characters a line. A portrait phone is about
+        // 450dp wide and never reaches the cap, so nothing changes there.
+        val content = Modifier
+            .padding(padding)
+            .fillMaxSize()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .widthIn(max = 640.dp)
         when (val state = ui.state) {
             ScanState.Editing -> Editor(
                 text = ui.text,
@@ -116,7 +126,7 @@ fun ScanScreen(
                 onScan = viewModel::scan,
                 onSample = viewModel::loadSample,
                 onChecks = { showChecks = true },
-                modifier = Modifier.padding(padding),
+                modifier = content,
             )
 
             is ScanState.Scanned -> Results(
@@ -130,7 +140,7 @@ fun ScanScreen(
                 onBack = viewModel::back,
                 onShare = { context.startActivity(shareReport(state)) },
                 onChecks = { showChecks = true },
-                modifier = Modifier.padding(padding),
+                modifier = content,
             )
         }
 
