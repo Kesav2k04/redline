@@ -167,8 +167,13 @@ private fun ChecksSheet(onDismiss: () -> Unit) {
                 modifier = Modifier.semantics { heading() },
             )
             Text(
+                // Four of six panel readers asked which law the numbers came from. None:
+                // they are the ranges usual in residential leases, and saying so is the
+                // difference between a flag and a legal claim.
                 text = "Each one looks for a specific term and, where there is a number, " +
-                    "reads the number and compares it.",
+                    "reads it and compares it with the range usual in residential leases. " +
+                    "That range is not the law where you live, so treat a flag as a " +
+                    "question to ask.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
