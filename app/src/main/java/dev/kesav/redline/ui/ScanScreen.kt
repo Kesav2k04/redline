@@ -49,7 +49,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Activity
 import android.content.ContextWrapper
+import android.content.Intent
 import dev.kesav.redline.Finding
+import dev.kesav.redline.Report
 import dev.kesav.redline.R
 import dev.kesav.redline.ScanState
 import dev.kesav.redline.ScanViewModel
@@ -97,6 +99,7 @@ fun ScanScreen(
                 onUnlock = { activity?.let(viewModel::buy) },
                 onRestore = viewModel::restore,
                 onBack = viewModel::back,
+                onShare = { context.startActivity(shareReport(state)) },
                 modifier = Modifier.padding(padding),
             )
         }
@@ -147,6 +150,24 @@ private fun Editor(
     }
 }
 
+/**
+ * The lease arrives by share and the argument leaves the same way.
+ *
+ * `createChooser` rather than a bare ACTION_SEND, so the reader picks the app instead of
+ * being sent wherever the system last defaulted to. Nothing is written to disk on the
+ * way out: the text goes straight into the intent, which keeps the promise that the
+ * lease never leaves the phone except when its owner decides to send it.
+ */
+private fun shareReport(state: ScanState.Scanned): Intent {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, Report.SUBJECT)
+        putExtra(Intent.EXTRA_TEXT, Report.build(state))
+    }
+    return Intent.createChooser(send, "Send this list")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+}
+
 private fun android.content.Context.findActivity(): Activity? {
     var c = this
     while (c is ContextWrapper) {
@@ -171,6 +192,7 @@ private fun Results(
     onUnlock: () -> Unit,
     onRestore: () -> Unit,
     onBack: () -> Unit,
+    onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val flagged = state.flaggedClauses
@@ -261,6 +283,29 @@ private fun Results(
                     ) {
                         Text("Edit text")
                     }
+                }
+            }
+        } else if (state.findings.isNotEmpty()) {
+            // Finding the clauses is half the job. The reader still has to raise them
+            // with a landlord, a parent or a lawyer, and retyping nineteen findings into
+            // a message is exactly where that stops happening.
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = onShare,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) {
+                    Text("Send this list")
+                }
+                TextButton(
+                    onClick = onBack,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Text("Edit text")
                 }
             }
         } else {
