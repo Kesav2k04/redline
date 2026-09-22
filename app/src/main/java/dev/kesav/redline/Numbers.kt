@@ -36,21 +36,34 @@ object Numbers {
      * number, so "rent for each of the ten months" yields 10 while "rent for months"
      * yields nothing.
      */
-    fun valueBefore(text: String, unit: Regex): Int? {
-        val words = token.findAll(text.lowercase()).map { it.value }.toList()
+    fun valueBefore(text: String, unit: Regex): Int? = quantities(text, unit).firstOrNull()?.value
 
-        for (i in words.indices) {
-            if (!unit.matches(words[i])) continue
+    /** A stated quantity, and the character span from its first number word to its unit. */
+    data class Quantity(val value: Int, val at: IntRange)
 
+    /**
+     * Every quantity in [text] expressed in [unit], in reading order.
+     *
+     * Positions are kept because the first quantity in a clause is often not the one a
+     * rule is about. "The rent shall be escalated by ten percent, and arrears carry a
+     * charge of two percent" has two percentages, and only the one beside the charge is
+     * a late fee.
+     */
+    fun quantities(text: String, unit: Regex): List<Quantity> {
+        val tokens = token.findAll(text.lowercase()).toList()
+        val found = mutableListOf<Quantity>()
+        for (i in tokens.indices) {
+            if (!unit.matches(tokens[i].value)) continue
             val run = mutableListOf<String>()
             var j = i - 1
-            while (j >= 0 && isNumberWord(words[j])) {
-                run += words[j]
+            while (j >= 0 && isNumberWord(tokens[j].value)) {
+                run += tokens[j].value
                 j--
             }
-            parse(run.asReversed())?.let { return it }
+            val value = parse(run.asReversed()) ?: continue
+            found += Quantity(value, tokens[j + 1].range.first..tokens[i].range.last)
         }
-        return null
+        return found
     }
 
     fun parse(words: List<String>): Int? {

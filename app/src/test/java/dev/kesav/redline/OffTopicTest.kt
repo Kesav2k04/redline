@@ -76,10 +76,17 @@ class OffTopicTest {
     fun `the rules really do fire on them, which is why the check exists`() {
         // If this ever goes quiet the check has stopped earning its place, and the
         // comment above about the recipe has become a story rather than a fact.
-        for ((name, text) in offTopic) {
+        //
+        // The news article used to be on this list. It tripped the occupant rule because
+        // "reside" matched inside "Residents", and word boundaries on the triggers fixed
+        // that at the source. Three still fire, because "at its sole discretion" and
+        // "continued use constitutes acceptance" are ordinary English and always will be.
+        for ((name, text) in offTopic - "news article") {
             val findings = Scanner.scan(ClauseSplitter.split(text))
             assertTrue("$name no longer trips any rule", findings.isNotEmpty())
         }
+        val news = Scanner.scan(ClauseSplitter.split(newsArticle)).map { it.ruleId }
+        assertFalse("residents read as a second occupant again", "occupant-surcharge" in news)
     }
 
     @Test
