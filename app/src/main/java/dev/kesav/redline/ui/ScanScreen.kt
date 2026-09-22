@@ -110,6 +110,7 @@ fun ScanScreen(
         when (val state = ui.state) {
             ScanState.Editing -> Editor(
                 text = ui.text,
+                price = ui.offer?.product?.price?.formatted,
                 onText = viewModel::edit,
                 onScan = viewModel::scan,
                 onSample = viewModel::loadSample,
@@ -200,6 +201,7 @@ private fun ChecksSheet(onDismiss: () -> Unit) {
 @Composable
 private fun Editor(
     text: String,
+    price: String?,
     onText: (String) -> Unit,
     onScan: () -> Unit,
     onSample: () -> Unit,
@@ -228,9 +230,14 @@ private fun Editor(
         // screen where they decide, not in a repository they will never open. It also
         // sets the expectation that this reads text and not a PDF, which was the other
         // thing people learned only by failing.
+        // The price belongs here, not only on the paywall. Reading a lease into the
+        // field is work, and learning the cost only after doing that work is the shape
+        // of an ambush even when the number is small. The offering loads over the
+        // network and lands after the first frame, so the sentence has to read properly
+        // without it.
         Text(
             text = "It runs on your phone. The text is not uploaded anywhere, and the " +
-                "full report is a one-time purchase.",
+                (price?.let { "full report is a one-time $it." } ?: "full report is a one-time purchase."),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
