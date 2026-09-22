@@ -35,6 +35,18 @@ private val Light = lightColorScheme(
     onSurfaceVariant = InkMuted,
     outline = InkMuted,
     outlineVariant = Hairline,
+    // The container roles decide what a bottom sheet, a menu and a dialog are painted
+    // with. Left unset they resolve to the baseline tonal palette, which is violet, and
+    // the first sheet this app ever showed came up lilac on a warm paper screen. Setting
+    // the whole ladder closes the class rather than the one component that exposed it.
+    surfaceContainerLowest = Paper,
+    surfaceContainerLow = Paper,
+    surfaceContainer = PaperSunk,
+    surfaceContainerHigh = PaperSunk,
+    surfaceContainerHighest = PaperSunk,
+    inverseSurface = Ink,
+    inverseOnSurface = Paper,
+    scrim = Ink,
 )
 
 private val Dark = darkColorScheme(
@@ -48,6 +60,14 @@ private val Dark = darkColorScheme(
     onSurfaceVariant = PaperMuted,
     outline = PaperMuted,
     outlineVariant = HairlineDark,
+    surfaceContainerLowest = Ink,
+    surfaceContainerLow = Color(0xFF1C1F24),
+    surfaceContainer = Color(0xFF212429),
+    surfaceContainerHigh = InkSunk,
+    surfaceContainerHighest = InkSunk,
+    inverseSurface = Paper,
+    inverseOnSurface = Ink,
+    scrim = Color(0xFF000000),
 )
 
 // Dynamic colour is off on purpose: the demo recording has to look the same on
