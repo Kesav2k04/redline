@@ -392,7 +392,7 @@ private fun Results(
         // and free in that case, so there is nothing behind a paywall to sell, and a
         // paywall over a scan of somebody's recipe is the single worst thing this app
         // could be caught doing.
-        if (!unlocked && state.looksLikeLease && state.findings.size > 1) {
+        if (!unlocked && state.sellable) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Column(
                 modifier = Modifier.padding(16.dp),

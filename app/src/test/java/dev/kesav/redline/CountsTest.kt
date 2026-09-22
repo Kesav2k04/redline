@@ -49,6 +49,8 @@ class CountsTest {
         )
         assertEquals(1, scanned.flaggedClauses)
         assertEquals(1, scanned.highClauses)
+        // One clause, shown free, so nothing is locked and nothing may be offered.
+        assertFalse("a paywall over zero locked clauses", scanned.sellable)
     }
 
     @Test

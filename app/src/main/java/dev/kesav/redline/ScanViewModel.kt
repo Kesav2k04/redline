@@ -61,6 +61,18 @@ sealed interface ScanState {
         val flaggedClauses: Int = groups.size
 
         /**
+         * Whether there is anything behind the paywall to sell.
+         *
+         * The first clause is always shown free, so a report with one flagged clause has
+         * nothing locked. The guard used to read `findings.size > 1` while the button read
+         * `groups.size - 1`, and one clause routinely trips several rules, so a single
+         * pasted clause produced "Show the other 0 clauses" over a report the reader could
+         * already see in full. It lives here, next to the counts, so the paywall and the
+         * label cannot disagree about the unit again.
+         */
+        val sellable: Boolean = looksLikeLease && groups.size > 1
+
+        /**
          * Clauses carrying at least one costly finding, not the number of such findings.
          *
          * One clause routinely trips several rules: a deposit of ten months rent that is
