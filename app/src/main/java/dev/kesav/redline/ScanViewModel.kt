@@ -15,6 +15,21 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * One clause and everything wrong with it.
+ *
+ * The screen used to show one card per finding, which meant a security-deposit paragraph
+ * that trips four rules appeared four times, quoted in full each time. Readers counted
+ * that as padding, and it broke the arithmetic on the paywall: the heading said "11 of 16
+ * clauses" and the button offered "18 more findings", two numbers in different units that
+ * cannot be reconciled by anyone doing the subtraction. Grouping makes the unit the same
+ * everywhere, which is the only way the two numbers can agree.
+ */
+data class ClauseGroup(val clause: Clause, val findings: List<Finding>) {
+    /** HIGH sorts before MEDIUM, so the worst finding sets the badge for the clause. */
+    val worst: Severity = findings.minByOrNull { it.severity.ordinal }?.severity ?: Severity.MEDIUM
+}
+
 sealed interface ScanState {
     data object Editing : ScanState
 
@@ -22,10 +37,20 @@ sealed interface ScanState {
         val clauseCount: Int,
         val findings: List<Finding>,
     ) : ScanState {
+        /**
+         * The findings, one entry per clause, in the order the findings were sorted.
+         *
+         * `groupBy` keeps first-appearance order, so the clause carrying the worst
+         * finding stays at the top and the list still reads worst-first.
+         */
+        val groups: List<ClauseGroup> = findings
+            .groupBy { it.clause.index }
+            .map { (_, fs) -> ClauseGroup(fs.first().clause, fs) }
+
         // Computed once here rather than on every read. As getters these walked the
         // findings list twice per recomposition of the results header, which is the one
         // composable guaranteed to recompose while the list scrolls.
-        val flaggedClauses: Int = findings.map { it.clause.index }.distinct().size
+        val flaggedClauses: Int = groups.size
 
         /**
          * Clauses carrying at least one costly finding, not the number of such findings.

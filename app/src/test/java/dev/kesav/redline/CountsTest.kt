@@ -3,6 +3,7 @@ package dev.kesav.redline
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import dev.kesav.redline.ui.severitySplit
 import org.junit.Test
 
 /**
@@ -47,6 +48,65 @@ class CountsTest {
         )
         assertEquals(1, scanned.flaggedClauses)
         assertEquals(1, scanned.highClauses)
+    }
+
+    @Test
+    fun `the subheading never contradicts the heading`() {
+        val scanned = scanSample()
+        val line = severitySplit(scanned.highClauses, scanned.flaggedClauses)
+        // The old line read "9 of them are worth arguing about" under a heading saying
+        // eleven clauses cost money, which invites the reader to ask what is wrong with
+        // the other two. The split adds up instead.
+        assertEquals("11 clauses flagged in the fixture", 11, scanned.flaggedClauses)
+        assertEquals("9 marked costly, 2 worth checking.", line)
+    }
+
+    @Test
+    fun `the split always accounts for every flagged clause`() {
+        for (flagged in 1..30) {
+            for (high in 0..flagged) {
+                val line = severitySplit(high, flagged)
+                val numbers = Regex("\\d+").findAll(line).map { it.value.toInt() }.toList()
+                val total = if (numbers.size == 2) numbers.sum() else numbers.singleOrNull() ?: flagged
+                assertEquals("$high of $flagged produced: $line", flagged, total)
+            }
+        }
+    }
+
+    @Test
+    fun `the screen and the button count the same thing`() {
+        val scanned = scanSample()
+        // The heading says "N of M clauses" and the button offers "the other K clauses".
+        // K + the one free card has to equal N, or a reader doing the subtraction at the
+        // moment of payment gets an answer that makes the app look like it is padding.
+        assertEquals(scanned.flaggedClauses, scanned.groups.size)
+        assertEquals(scanned.flaggedClauses - 1, scanned.groups.size - 1)
+    }
+
+    @Test
+    fun `a clause is never shown twice`() {
+        val scanned = scanSample()
+        val indices = scanned.groups.map { it.clause.index }
+        assertEquals("the same clause appeared in two cards", indices.size, indices.distinct().size)
+    }
+
+    @Test
+    fun `grouping loses no finding`() {
+        val scanned = scanSample()
+        assertEquals(scanned.findings.size, scanned.groups.sumOf { it.findings.size })
+    }
+
+    @Test
+    fun `the badge on a mixed clause shows the worst severity`() {
+        val clause = Clause(0, "a")
+        val group = ClauseGroup(
+            clause,
+            listOf(
+                Finding(clause, "r1", "m", "why", Severity.MEDIUM),
+                Finding(clause, "r2", "h", "why", Severity.HIGH),
+            ),
+        )
+        assertEquals(Severity.HIGH, group.worst)
     }
 
     @Test

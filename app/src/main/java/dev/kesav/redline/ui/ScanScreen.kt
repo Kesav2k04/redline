@@ -60,6 +60,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Activity
 import android.content.ContextWrapper
 import android.content.Intent
+import dev.kesav.redline.ClauseGroup
 import dev.kesav.redline.Finding
 import dev.kesav.redline.Report
 import dev.kesav.redline.R
@@ -142,8 +143,20 @@ private fun Editor(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Paste your lease, or share it here from any app.",
+            text = "Paste your lease, or share the text from any app.",
             style = MaterialTheme.typography.bodyLarge,
+        )
+
+        // The strongest thing about this app was written only in the README. Someone
+        // deciding between this and pasting their lease into a chatbot needs it on the
+        // screen where they decide, not in a repository they will never open. It also
+        // sets the expectation that this reads text and not a PDF, which was the other
+        // thing people learned only by failing.
+        Text(
+            text = "It runs on your phone. The text is not uploaded anywhere, and the " +
+                "full report is a one-time purchase.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         OutlinedTextField(
@@ -234,7 +247,7 @@ private fun Results(
                 text = if (flagged == 0) {
                     "No rule matched this text. That is not the same as a clean lease."
                 } else {
-                    "${state.highClauses} of them are worth arguing about before you sign."
+                    severitySplit(state.highClauses, flagged)
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -242,12 +255,15 @@ private fun Results(
 
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(16.dp),
+            // Extra room at the foot so the last card clears the pinned offer bar.
+            // Without it the bar sits on top of the final card and crops it, which
+            // reads as an unfinished screen rather than as a scroll position.
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            itemsIndexed(state.findings) { index, finding ->
+            itemsIndexed(state.groups) { index, group ->
                 // The first one is shown in full so the rest are a known quantity.
-                FindingCard(finding, revealed = unlocked || index == 0, row = index)
+                ClauseCard(group, revealed = unlocked || index == 0, row = index)
             }
         }
 
@@ -284,8 +300,13 @@ private fun Results(
                         // "findings", not a bare number. The heading counts clauses and
                         // this counts findings, and without the noun the two numbers
                         // read as a contradiction.
+                        // Clauses, because the heading counts clauses. Offering
+                        // "18 more findings" under a heading reading "11 of 16 clauses"
+                        // put two units on one screen and invited a subtraction that
+                        // has no sensible answer, at the exact moment someone decides
+                        // whether to trust the app with money.
                         Text(
-                            "Show the other ${state.findings.size - 1} findings" +
+                            "Show the other ${state.groups.size - 1} clauses" +
                                 (price?.let { " for $it" } ?: "")
                         )
                     }
@@ -298,6 +319,7 @@ private fun Results(
                     ) {
                         Text("Already bought it? Restore")
                     }
+
                     TextButton(
                         onClick = onBack,
                         modifier = Modifier.heightIn(min = 48.dp),
@@ -374,17 +396,40 @@ private fun animationsEnabled(): Boolean {
     }
 }
 
+/**
+ * The line under the heading, which is the legend for the chips on the cards.
+ *
+ * It used to read "9 of them are worth arguing about", which is backwards: if eleven
+ * clauses cost money then all eleven are worth arguing about, and a reader who notices
+ * that wonders what is wrong with the other two. The number was never a subset of
+ * importance, it was the severity split, so the line now says that and happens to teach
+ * the two words the cards use before the reader meets them.
+ */
+internal fun severitySplit(high: Int, flagged: Int): String = when {
+    high == flagged && flagged == 1 -> "The one below is marked costly."
+    high == flagged -> "All $flagged are marked costly."
+    high == 0 -> "None is marked costly, but all $flagged are worth checking."
+    else -> "$high marked costly, ${flagged - high} worth checking."
+}
+
 @Composable
-private fun FindingCard(finding: Finding, revealed: Boolean, row: Int = 0) {
+private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
+    val count = group.findings.size
+    val problems = if (count == 1) "1 problem" else "$count problems"
+
     val spoken = if (revealed) {
         // The clause text belongs in here. Leaving it out told a screen reader that a
         // costly clause existed and what it was called, then withheld the sentence the
         // whole app exists to show, which is the one thing a sighted reader gets for
         // free by looking down two lines.
-        "${finding.severity.name.lowercase()} risk. ${finding.headline}. ${finding.reason} " +
-            "The clause reads: ${finding.clause.text}"
+        buildString {
+            append("${group.worst.name.lowercase()} risk, $problems. ")
+            for (f in group.findings) append("${f.headline}. ${f.reason} ")
+            append("The clause reads: ${group.clause.text}")
+        }
     } else {
-        "Locked finding, ${finding.severity.name.lowercase()} risk. Buy the report to read it."
+        "Locked clause, ${group.worst.name.lowercase()} risk, $problems. " +
+            "Buy the report to read it."
     }
 
     Card(
@@ -414,19 +459,21 @@ private fun FindingCard(finding: Finding, revealed: Boolean, row: Int = 0) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SeverityChip(finding.severity)
+                SeverityChip(group.worst)
 
                 // Without this word the three grey bars below are a loading skeleton,
                 // which is the single most expensive misread available: a reviewer
                 // watching the video concludes the app is still fetching rather than
                 // that there is something behind a paywall.
-                if (!revealed) {
-                    Text(
-                        text = "Locked",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                // The count is deliberately given away for free. A two-level severity
+                // scale where almost everything is "Costly" tells a reader nothing, and
+                // "3 problems" on a locked card is both a real unit of information and
+                // the most honest possible argument for paying.
+                Text(
+                    text = if (revealed) problems else "$problems, locked",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             AnimatedContent(
@@ -439,10 +486,15 @@ private fun FindingCard(finding: Finding, revealed: Boolean, row: Int = 0) {
             ) { open ->
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (open) {
-                Text(finding.headline, style = MaterialTheme.typography.titleMedium)
-                Text(finding.reason, style = MaterialTheme.typography.bodyMedium)
+                for (f in group.findings) {
+                    Text(f.headline, style = MaterialTheme.typography.titleMedium)
+                    Text(f.reason, style = MaterialTheme.typography.bodyMedium)
+                }
+                // Quoted once at the foot of the card, however many rules it tripped.
+                // Repeating the same paragraph under every finding was read as padding
+                // the count rather than as thoroughness.
                 Text(
-                    text = finding.clause.text,
+                    text = group.clause.text,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -454,7 +506,7 @@ private fun FindingCard(finding: Finding, revealed: Boolean, row: Int = 0) {
                 // identical cards in a row read as one component repeated, and a
                 // repeated component reads as a placeholder. Sentences are not all the
                 // same length.
-                val bars = redactionWidths(finding.headline)
+                val bars = redactionWidths(group.findings.first().headline)
                 Redacted(widthFraction = bars[0], height = 16.dp)
                 Redacted(widthFraction = bars[1], height = 12.dp)
                 Redacted(widthFraction = bars[2], height = 12.dp)
