@@ -1,5 +1,10 @@
 package dev.kesav.redline.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import android.provider.Settings
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -226,7 +232,7 @@ private fun Results(
         ) {
             itemsIndexed(state.findings) { index, finding ->
                 // The first one is shown in full so the rest are a known quantity.
-                FindingCard(finding, revealed = unlocked || index == 0)
+                FindingCard(finding, revealed = unlocked || index == 0, row = index)
             }
         }
 
@@ -319,8 +325,42 @@ private fun Results(
     }
 }
 
+/**
+ * How long the report takes to open, and why it is not instant.
+ *
+ * The moment the purchase lands is the only moment in this app worth animating. A hard
+ * swap from redaction to text reads as a screen being replaced; opening the cards in
+ * sequence down the list reads as a document being unsealed, which is what the reader
+ * just paid for. The stagger caps early so a long report does not make the last card
+ * wait on the first twenty.
+ */
+private const val REVEAL_MS = 260
+private const val REVEAL_STAGGER_MS = 45
+private const val REVEAL_STAGGER_CAP = 8
+
+/**
+ * Zero when the reader has turned animations off system-wide.
+ *
+ * Developer options and the accessibility "remove animations" setting both write this,
+ * and honouring it costs one read. An app that keeps animating after someone has asked
+ * the whole device to stop is not being expressive, it is ignoring an instruction.
+ */
 @Composable
-private fun FindingCard(finding: Finding, revealed: Boolean) {
+private fun animationsEnabled(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        runCatching {
+            Settings.Global.getFloat(
+                context.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f,
+            )
+        }.getOrDefault(1f) > 0f
+    }
+}
+
+@Composable
+private fun FindingCard(finding: Finding, revealed: Boolean, row: Int = 0) {
     val spoken = if (revealed) {
         "${finding.severity.name.lowercase()} risk. ${finding.headline}. ${finding.reason}"
     } else {
@@ -341,6 +381,13 @@ private fun FindingCard(finding: Finding, revealed: Boolean) {
         // whole surface is meant to look like a document rather than a stack of tiles.
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
+        val delay = if (animationsEnabled()) {
+            minOf(row, REVEAL_STAGGER_CAP) * REVEAL_STAGGER_MS
+        } else {
+            0
+        }
+        val duration = if (animationsEnabled()) REVEAL_MS else 0
+
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -362,7 +409,16 @@ private fun FindingCard(finding: Finding, revealed: Boolean) {
                 }
             }
 
-            if (revealed) {
+            AnimatedContent(
+                targetState = revealed,
+                transitionSpec = {
+                    fadeIn(tween(duration, delayMillis = delay)) togetherWith
+                        fadeOut(tween(duration / 2))
+                },
+                label = "finding",
+            ) { open ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (open) {
                 Text(finding.headline, style = MaterialTheme.typography.titleMedium)
                 Text(finding.reason, style = MaterialTheme.typography.bodyMedium)
                 Text(
@@ -382,6 +438,8 @@ private fun FindingCard(finding: Finding, revealed: Boolean) {
                 Redacted(widthFraction = bars[0], height = 16.dp)
                 Redacted(widthFraction = bars[1], height = 12.dp)
                 Redacted(widthFraction = bars[2], height = 12.dp)
+            }
+            }
             }
         }
     }
