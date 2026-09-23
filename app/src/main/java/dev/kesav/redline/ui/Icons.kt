@@ -7,12 +7,12 @@ import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
 /**
- * The dozen icons this app draws, as path data.
+ * The icons this app draws, as path data.
  *
  * The icon libraries were the alternative. The core set has none of camera, document or
  * paste, and the extended set is several megabytes of generated classes. The release
  * build is debuggable because the Test Store requires it, so R8 never runs and nothing
- * unused would be stripped: every one of those classes would ship. Twelve paths from the
+ * unused would be stripped: every one of those classes would ship. A dozen or so paths from the
  * Material Symbols set cost a few kilobytes instead.
  */
 internal object RedlineIcons {
@@ -30,6 +30,7 @@ internal object RedlineIcons {
     val Back = icon("M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z")
     val Close = icon("M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z")
     val Checks = icon("M22,7h-9v2h9V7zM22,15h-9v2h9V15zM5.54,11L2,7.46l1.41,-1.41l2.12,2.12l4.24,-4.24l1.41,1.41L5.54,11zM5.54,19L2,15.46l1.41,-1.41l2.12,2.12l4.24,-4.24l1.41,1.41L5.54,19z")
+    val Send = icon("M3.4,20.4l17.45,-7.48c0.81,-0.35 0.81,-1.49 0,-1.84L3.4,3.6c-0.66,-0.29 -1.39,0.2 -1.39,0.91L2,9.12c0,0.5 0.37,0.93 0.87,0.99L17,12 2.87,13.88c-0.5,0.07 -0.87,0.5 -0.87,1l0.01,4.61c0,0.71 0.73,1.2 1.39,0.91z")
     val Offline = icon("M22.99,9C19.15,5.16 13.8,3.76 8.84,4.78l2.52,2.52c3.47,-0.17 6.99,1.05 9.63,3.7l2,-2zM18.99,13c-1.29,-1.29 -2.84,-2.13 -4.49,-2.56l3.53,3.53 0.96,-0.97zM2,3.05L5.07,6.1C3.6,6.82 2.22,7.78 1,9l1.99,2c1.24,-1.24 2.67,-2.16 4.2,-2.77l2.24,2.24C7.81,10.89 6.27,11.73 5,13v0.01L6.99,15c1.36,-1.36 3.14,-2.04 4.92,-2.06L18.98,20l1.27,-1.26L3.29,1.79 2,3.05zM9,17l3,3 3,-3c-1.65,-1.66 -4.34,-1.66 -6,0z")
 
     private fun icon(vararg paths: String): ImageVector =

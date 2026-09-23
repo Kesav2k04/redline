@@ -206,6 +206,7 @@ fun ScanScreen(
                 onRestore = viewModel::restore,
                 onBack = viewModel::back,
                 onShare = { context.startActivity(shareReport(state)) },
+                onLetter = { Report.letter(state)?.let { context.startActivity(shareLetter(it)) } },
                 onChecks = { showChecks = true },
                 modifier = content,
             )
@@ -299,6 +300,20 @@ private fun shareReport(state: ScanState.Scanned): Intent {
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 }
 
+/**
+ * The letter goes out the same way as the report, through the reader's own apps, so the
+ * app never holds an address, an account or a copy of what was sent.
+ */
+private fun shareLetter(letter: String): Intent {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, Report.LETTER_SUBJECT)
+        putExtra(Intent.EXTRA_TEXT, letter)
+    }
+    return Intent.createChooser(send, "Ask the landlord")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+}
+
 private fun android.content.Context.findActivity(): Activity? {
     var c = this
     while (c is ContextWrapper) {
@@ -324,6 +339,7 @@ private fun Results(
     onRestore: () -> Unit,
     onBack: () -> Unit,
     onShare: () -> Unit,
+    onLetter: () -> Unit,
     onChecks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -347,7 +363,7 @@ private fun Results(
             )
             if (shareable) {
                 IconButton(onClick = onShare) {
-                    Icon(RedlineIcons.Share, contentDescription = "Send this list")
+                    Icon(RedlineIcons.Share, contentDescription = "Send the full report")
                 }
             }
         }
@@ -430,7 +446,7 @@ private fun Results(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "Pay once. Every lease you scan after this opens in full.",
+                        text = "Pay once: every clause, what to ask for, and a letter to send your landlord.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -498,15 +514,28 @@ private fun Results(
             // Finding the clauses is half the job. The reader still has to raise them
             // with a landlord, a parent or a lawyer, and retyping nineteen findings into
             // a message is exactly where that stops happening.
+            //
+            // Two readers, two messages. The landlord gets the requests and nothing else;
+            // a parent or an adviser gets the quoted clauses and the reasons.
             BottomBar {
                 Button(
-                    onClick = onShare,
+                    onClick = onLetter,
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 ) {
-                    Icon(RedlineIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(RedlineIcons.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Send this list", style = MaterialTheme.typography.labelLarge)
+                    Text("Ask the landlord for these changes", style = MaterialTheme.typography.labelLarge)
+                }
+                TextButton(
+                    onClick = onShare,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                ) {
+                    Text("Send the full report to someone else")
                 }
             }
         }
