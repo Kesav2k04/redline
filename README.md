@@ -131,8 +131,10 @@ the fix than it does about the corpus.
 
 - Entitlement identifier: `full_report`, declared once in
   [`Billing.kt`](app/src/main/java/dev/kesav/redline/Billing.kt) and nowhere else.
-- Entitlement is read from `CustomerInfo` in `Billing.refresh()` and applied **before
-  the report renders**, so a paid result is never shown and then withdrawn.
+- Entitlement is read from `CustomerInfo` in `Billing.refresh()`. The report is drawn
+  locked until that answer arrives, and the buy button stays disabled until then
+  (`Billing.known`), so a paid result is **never shown and then withdrawn**, and nobody
+  is offered something they already own.
 - The price on the button comes from the offering, not from a string in the code.
 - Cancelled purchases are not treated as errors.
 - The button sells a named package type, never `availablePackages.first()`. Reordering the
