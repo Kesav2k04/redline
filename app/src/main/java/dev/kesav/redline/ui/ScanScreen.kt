@@ -1,6 +1,17 @@
 package dev.kesav.redline.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import kotlin.math.roundToInt
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.OutlinedButton
@@ -139,8 +150,9 @@ fun ScanScreen(
         }
     }
 
+    // No app bar. Each state draws its own header: the first screen leads with what
+    // the app promises, and "Redline" in a bar above it only repeated the launcher label.
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         // Capped and centred so a landscape phone, a tablet or an unfolded foldable does
@@ -266,120 +278,6 @@ private fun ChecksSheet(onDismiss: () -> Unit) {
     }
 }
 
-@Composable
-private fun Editor(
-    text: String,
-    price: String?,
-    onText: (String) -> Unit,
-    onScan: () -> Unit,
-    onSample: () -> Unit,
-    onChecks: () -> Unit,
-    reading: String?,
-    source: String?,
-    photoPages: Int,
-    onOpen: () -> Unit,
-    onPhoto: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    // Three things this column has to survive: a keyboard covering the lower half, a
-    // sixteen-line text field, and a reader at 200% font scale. Without the scroll and
-    // the ime padding the Scan button sits underneath the keyboard, which is how the
-    // first attempt to drive this screen ended up typing into the lease field instead.
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .imePadding()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            text = "Open the PDF your landlord sent, photograph the paper copy, or paste the text.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-
-        // The strongest thing about this app was written only in the README. Someone
-        // deciding between this and pasting their lease into a chatbot needs it on the
-        // screen where they decide, not in a repository they will never open. It also
-        // used to warn that this read text and not a PDF, the other thing people learned
-        // only by failing. It reads both now, and still uploads neither.
-        // The price belongs here, not only on the paywall. Reading a lease into the
-        // field is work, and learning the cost only after doing that work is the shape
-        // of an ambush even when the number is small. The offering loads over the
-        // network and lands after the first frame, so the sentence has to read properly
-        // without it.
-        Text(
-            text = "It runs on your phone, reading included. Nothing is uploaded, and the " +
-                (price?.let { "full report is a one-time $it." } ?: "full report is a one-time purchase."),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        if (reading != null) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                Text(reading, style = MaterialTheme.typography.bodyMedium)
-            }
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpen, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text("Open a PDF or photo", textAlign = TextAlign.Center)
-                }
-                if (onPhoto != null) {
-                    OutlinedButton(onClick = onPhoto, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                        Text(
-                            if (photoPages > 0) "Photograph page ${photoPages + 1}" else "Photograph a page",
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            }
-        }
-
-        OutlinedTextField(
-            value = text,
-            onValueChange = onText,
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentDescription = "Lease text" },
-            label = { Text("Lease text") },
-            minLines = 10,
-            maxLines = 16,
-        )
-
-        if (source != null) {
-            Text(
-                text = source,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Button(
-            onClick = onScan,
-            enabled = text.isNotBlank() && reading == null,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) {
-            Text("Scan")
-        }
-
-        TextButton(onClick = onSample, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("Try it on a sample lease")
-        }
-
-        TextButton(onClick = onChecks, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text("What Redline checks")
-        }
-    }
-}
-
 /**
  * The lease arrives by share and the argument leaves the same way.
  *
@@ -426,30 +324,29 @@ private fun Results(
     onChecks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val flagged = state.flaggedClauses
+    // Never offered for text that is not a lease: the exported report opens "Redline
+    // read 4 clauses in this lease", and sending that about a recipe puts the app's
+    // mistake in someone else's inbox with its name on it.
+    val shareable = state.findings.isNotEmpty() && state.looksLikeLease && (unlocked || !state.sellable)
 
     Column(modifier = modifier.fillMaxSize()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(RedlineIcons.Back, contentDescription = "Edit text")
+            }
             Text(
-                text = when {
-                    flagged == 0 -> "Nothing matched"
-                    !state.looksLikeLease -> "This does not read like a lease"
-                    else -> "$flagged of ${state.clauseCount} clauses will cost you money"
-                },
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.semantics { heading() },
+                "Report",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f),
             )
-            Text(
-                text = when {
-                    flagged == 0 -> "No rule matched this text. That is not the same as a clean lease."
-                    !state.looksLikeLease ->
-                        if (flagged == 1) "One match below, shown free. Read on for why."
-                        else "$flagged matches below, shown free. Read on for why."
-                    else -> severitySplit(state.highClauses, flagged)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            if (shareable) {
+                IconButton(onClick = onShare) {
+                    Icon(RedlineIcons.Share, contentDescription = "Send this list")
+                }
+            }
         }
 
         LazyColumn(
@@ -457,9 +354,11 @@ private fun Results(
             // Extra room at the foot so the last card clears the pinned offer bar.
             // Without it the bar sits on top of the final card and crops it, which
             // reads as an unfinished screen rather than as a scroll position.
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item { Summary(state, locked = !unlocked && state.sellable) }
+
             if (!state.looksLikeLease) {
                 item { NotALeaseNotice() }
             }
@@ -479,11 +378,26 @@ private fun Results(
             // the number is based on, and the bar already carries the two buttons that
             // matter more.
             item {
-                TextButton(
+                Surface(
                     onClick = onChecks,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = Color.Transparent,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("What Redline checks, all ${Scanner.ruleCount} of them")
+                    Row(
+                        modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(RedlineIcons.Checks, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            "What Redline checks, all ${Scanner.ruleCount} of them",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(RedlineIcons.Chevron, contentDescription = null)
+                    }
                 }
             }
         }
@@ -501,33 +415,46 @@ private fun Results(
         // paywall over a scan of somebody's recipe is the single worst thing this app
         // could be caught doing.
         if (!unlocked && state.sellable) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+            BottomBar {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        RedlineIcons.Lock,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "Pay once. Every lease you scan after this opens in full.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 // Enabled through the purchase, guarded in the click instead.
                 //
                 // A disabled filled Button in Material 3 is not a dimmed red button: it
-                // is `onSurface` at 12% alpha, which on this paper is a pale grey slab.
-                // Disabling on `busy` therefore turned the one red element on the screen
-                // grey at the exact second the money moves, which is the climax of the
-                // demo. Measured on device: the first painted frame is already red,
-                // because the entitlement read finishes while the reader is still in
-                // the editor, so `known` is the honest disable and `busy` never was.
+                // is `onSurface` at 12% alpha, a pale grey slab. Disabling on `busy`
+                // therefore turned the one red element on the screen grey at the exact
+                // second the money moves, which is the climax of the demo. Measured on
+                // device: the first painted frame is already red, because the
+                // entitlement read finishes while the reader is still in the editor, so
+                // `known` is the honest disable and `busy` never was.
                 Button(
                     onClick = { if (!busy) onUnlock() },
                     enabled = known,
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 48.dp)
+                        .heightIn(min = 56.dp)
                         .semantics {
                             if (busy) contentDescription = "Completing your purchase"
                         },
                 ) {
                     if (busy) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
                             // Defaults to primary, the same red as the fill underneath.
                             color = MaterialTheme.colorScheme.onPrimary,
@@ -538,20 +465,21 @@ private fun Results(
                         // put two units on one screen and invited a subtraction that
                         // has no sensible answer, at the exact moment someone decides
                         // whether to trust the app with money.
-                        Text(unlockLabel(state.groups.size - 1, price))
+                        Text(unlockLabel(state.groups.size - 1, price), style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
                     TextButton(
                         onClick = onRestore,
                         enabled = known && !busy,
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     ) {
                         Text("Already bought it? Restore")
                     }
-
                     TextButton(
                         onClick = onBack,
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.heightIn(min = 48.dp),
                         colors = ButtonDefaults.textButtonColors(
                             // Next to a filled button this was the same red, so going back
@@ -563,61 +491,162 @@ private fun Results(
                     }
                 }
             }
-        } else if (state.findings.isNotEmpty() && !state.looksLikeLease) {
-            // No share button here. The exported report opens "Redline read 4 clauses in
-            // this lease", and sending that about a document which is not a lease puts
-            // the app's mistake in someone else's inbox with the app's name on it.
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text("Edit text")
-                }
-            }
-        } else if (state.findings.isNotEmpty()) {
+        } else if (shareable) {
             // Finding the clauses is half the job. The reader still has to raise them
             // with a landlord, a parent or a lawyer, and retyping nineteen findings into
             // a message is exactly where that stops happening.
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            BottomBar {
                 Button(
                     onClick = onShare,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 ) {
-                    Text("Send this list")
-                }
-                TextButton(
-                    onClick = onBack,
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        // Next to a filled button this was the same red, so going back
-                        // to edit signalled just as loudly as paying.
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
-                ) {
-                    Text("Edit text")
-                }
-            }
-        } else {
-            // The other branches draw a divider and 16dp. This one used to hug the
-            // bottom edge with 8dp and no rule above it, and it is the state a judge
-            // lands on if they paste arbitrary text during a live demo.
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text("Edit text")
+                    Icon(RedlineIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Send this list", style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
+    }
+}
+
+/** The pinned foot of the report: lifted off the list so it never reads as the last card. */
+@Composable
+private fun BottomBar(content: @Composable () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        shadowElevation = 12.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            content()
+        }
+    }
+}
+
+/**
+ * The count, set as large as anything in the app, with the split under it.
+ *
+ * The number counts up from zero the first time it is drawn. It is the moment the reader
+ * learns what the lease costs them, and a figure that arrives already sitting there reads
+ * as a label rather than as a result.
+ */
+@Composable
+private fun Summary(state: ScanState.Scanned, locked: Boolean) {
+    val hero = LocalHero.current
+    val flagged = state.flaggedClauses
+    val heading = when {
+        flagged == 0 -> "Nothing matched"
+        !state.looksLikeLease -> "This does not read like a lease"
+        else -> "$flagged of ${state.clauseCount} clauses will cost you money"
+    }
+
+    val moving = animationsEnabled()
+    val shown = remember(state) { Animatable(if (moving) 0f else flagged.toFloat()) }
+    LaunchedEffect(state) {
+        if (moving) shown.animateTo(flagged.toFloat(), tween(durationMillis = 700))
+    }
+
+    Surface(
+        color = hero.container,
+        contentColor = hero.content,
+        shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            if (flagged == 0 || !state.looksLikeLease) {
+                Text(
+                    text = heading,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = when {
+                        flagged == 0 -> "No rule matched this text. That is not the same as a clean lease."
+                        flagged == 1 -> "One match below, shown free. Read on for why."
+                        else -> "$flagged matches below, shown free. Read on for why."
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = hero.muted,
+                )
+            } else {
+                Column(Modifier.clearAndSetSemantics { contentDescription = heading; heading() }) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = shown.value.roundToInt().toString(),
+                            style = MaterialTheme.typography.displayLarge,
+                            color = hero.accent,
+                        )
+                        Text(
+                            text = " of ${state.clauseCount} clauses",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                    Text("will cost you money", style = MaterialTheme.typography.titleLarge)
+                }
+
+                SeverityBar(
+                    serious = state.highClauses,
+                    other = flagged - state.highClauses,
+                    clear = (state.clauseCount - flagged).coerceAtLeast(0),
+                    spoken = severitySplit(state.highClauses, flagged),
+                )
+
+                // The split is already in the legend, so this line says what happens
+                // next instead of repeating it.
+                val rest = state.groups.size - 1
+                Text(
+                    text = when {
+                        !locked -> "Most serious first. Each one quotes the clause it came from."
+                        rest == 1 -> "The first is below, free. The other one opens with a single payment."
+                        else -> "The first is below, free. The other $rest open with a single payment."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = hero.muted,
+                )
+            }
+        }
+    }
+}
+
+/** Serious, worth checking and clear, as one bar the width of the card. */
+@Composable
+private fun SeverityBar(serious: Int, other: Int, clear: Int, spoken: String) {
+    val hero = LocalHero.current
+    val amber = MaterialTheme.colorScheme.tertiary
+    val total = (serious + other + clear).coerceAtLeast(1)
+    // Read aloud as one sentence rather than as three coloured boxes and three labels.
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            if (serious > 0) Box(Modifier.weight(serious.toFloat() / total).fillMaxHeight().background(hero.accent))
+            if (other > 0) Box(Modifier.weight(other.toFloat() / total).fillMaxHeight().background(amber))
+            if (clear > 0) Box(Modifier.weight(clear.toFloat() / total).fillMaxHeight().background(hero.content.copy(alpha = 0.18f)))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Legend(hero.accent, "$serious serious")
+            if (other > 0) Legend(amber, "$other worth checking")
+            Legend(hero.content.copy(alpha = 0.35f), "$clear clear")
+        }
+    }
+}
+
+@Composable
+private fun Legend(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(8.dp).background(color, RoundedCornerShape(2.dp)))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = LocalHero.current.muted)
     }
 }
 
@@ -642,7 +671,7 @@ private const val REVEAL_STAGGER_CAP = 8
  * the whole device to stop is not being expressive, it is ignoring an instruction.
  */
 @Composable
-private fun animationsEnabled(): Boolean {
+internal fun animationsEnabled(): Boolean {
     val context = LocalContext.current
     return remember(context) {
         runCatching {
@@ -696,15 +725,15 @@ internal fun unlockLabel(otherClauses: Int, price: String?): String {
  */
 @Composable
 private fun NotALeaseNotice() {
-    Card(
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        color = scheme.tertiaryContainer,
+        contentColor = scheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
@@ -717,7 +746,6 @@ private fun NotALeaseNotice() {
                     "contract language and will fire on almost any document. Nothing " +
                     "here is charged for, and none of it should be relied on.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -727,6 +755,8 @@ private fun NotALeaseNotice() {
 private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
     val count = group.findings.size
     val problems = if (count == 1) "1 problem" else "$count problems"
+    val scheme = MaterialTheme.colorScheme
+    val edge = if (group.worst == Severity.HIGH) scheme.primary else scheme.tertiary
 
     val spoken = if (revealed) {
         // The clause text belongs in here. Leaving it out told a screen reader that a
@@ -743,101 +773,104 @@ private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
             "Buy the report to read it."
     }
 
-    Card(
+    val delay = if (animationsEnabled()) minOf(row, REVEAL_STAGGER_CAP) * REVEAL_STAGGER_MS else 0
+    val duration = if (animationsEnabled()) REVEAL_MS else 0
+
+    // A red or amber rule down the left edge, which is how a lawyer marks a clause in the
+    // margin, and the one thing that tells the two severities apart at a glance while
+    // scrolling fast.
+    Surface(
+        color = scheme.surfaceContainerLowest,
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier
             .fillMaxWidth()
             .clearAndSetSemantics { contentDescription = spoken },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-        // A filled Material 3 card sits at elevation zero, and this one's container is the
-        // same paper the page is printed on, so without a hairline there was nothing to
-        // say where one finding stopped and the next began. Squinting at the screen gave
-        // a single column of text. A border reads better than a shadow here, because the
-        // whole surface is meant to look like a document rather than a stack of tiles.
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        val delay = if (animationsEnabled()) {
-            minOf(row, REVEAL_STAGGER_CAP) * REVEAL_STAGGER_MS
-        } else {
-            0
-        }
-        val duration = if (animationsEnabled()) REVEAL_MS else 0
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(Modifier.width(5.dp).fillMaxHeight().background(edge))
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SeverityChip(group.worst)
 
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SeverityChip(group.worst)
-
-                // Without this word the three grey bars below are a loading skeleton,
-                // which is the single most expensive misread available: a reviewer
-                // watching the video concludes the app is still fetching rather than
-                // that there is something behind a paywall.
-                // The count is deliberately given away for free. A two-level severity
-                // scale where almost everything is "Costly" tells a reader nothing, and
-                // "3 problems" on a locked card is both a real unit of information and
-                // the most honest possible argument for paying.
-                Text(
-                    text = if (revealed) problems else "$problems, locked",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            AnimatedContent(
-                targetState = revealed,
-                transitionSpec = {
-                    fadeIn(tween(duration, delayMillis = delay)) togetherWith
-                        fadeOut(tween(duration / 2))
-                },
-                label = "finding",
-            ) { open ->
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (open) {
-                for (f in group.findings) {
-                    Text(f.headline, style = MaterialTheme.typography.titleMedium)
-                    Text(f.reason, style = MaterialTheme.typography.bodyMedium)
+                    // Without this word the grey bars below are a loading skeleton, which
+                    // is the single most expensive misread available: a reviewer watching
+                    // the video concludes the app is still fetching rather than that
+                    // there is something behind a paywall. The count is deliberately
+                    // given away for free: "3 problems" on a locked card is both a real
+                    // unit of information and the most honest argument for paying.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (!revealed) {
+                            Icon(
+                                RedlineIcons.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = scheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            text = if (revealed) problems else "$problems, locked",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                // Quoted once at the foot of the card, however many rules it tripped.
-                // Repeating the same paragraph under every finding was read as padding
-                // the count rather than as thoroughness.
-                Text(
-                    text = group.clause.text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                // Redaction rather than a blur: Modifier.blur does nothing below API 31
-                // and would quietly show the text it is meant to hide.
-                //
-                // The subject is not withheld. Naming it costs nothing, because knowing
-                // a clause is about the deposit is not knowing what is wrong with it,
-                // and a card that says "Your deposit, 5 problems" argues for itself in
-                // a way that three anonymous bars never will.
+
+                // The subject is never withheld. Knowing a clause is about the deposit is
+                // not knowing what is wrong with it, and "Your deposit, 5 problems" argues
+                // for itself in a way three anonymous bars never will.
                 Text(
                     text = group.findings.first().topic,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = edge,
                 )
 
-                // One bar per hidden finding, up to three. A card printing "1 problem"
-                // above three bars contradicts its own count, and the count is the most
-                // honest argument this card has for being paid for. Capping at three
-                // keeps a five-problem clause from dominating the screen.
-                //
-                // Widths come from the clause rather than being fixed, because four
-                // identical cards in a row read as one component repeated, and a
-                // repeated component reads as a placeholder. Sentences are not all the
-                // same length.
-                val bars = redactionWidths(group.clause.text)
-                val heights = listOf(16.dp, 12.dp, 12.dp)
-                repeat(minOf(group.findings.size, 3)) { i ->
-                    Redacted(widthFraction = bars[i], height = heights[i])
+                AnimatedContent(
+                    targetState = revealed,
+                    transitionSpec = {
+                        fadeIn(tween(duration, delayMillis = delay)) togetherWith
+                            fadeOut(tween(duration / 2))
+                    },
+                    label = "finding",
+                ) { open ->
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (open) {
+                            for (f in group.findings) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(f.headline, style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        f.reason,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = scheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            // Quoted once at the foot of the card, however many rules it
+                            // tripped. Repeating the paragraph under every finding was
+                            // read as padding the count rather than as thoroughness.
+                            Quote(group.clause.text, Modifier.padding(top = 4.dp))
+                        } else {
+                            // Redaction rather than a blur: Modifier.blur does nothing
+                            // below API 31 and would quietly show the text it hides.
+                            //
+                            // One bar per hidden finding, up to three: a card printing
+                            // "1 problem" above three bars contradicts its own count.
+                            // Widths come from the clause, because identical cards in a
+                            // row read as one placeholder repeated.
+                            val bars = redactionWidths(group.clause.text)
+                            val heights = listOf(16.dp, 12.dp, 12.dp)
+                            repeat(minOf(group.findings.size, 3)) { i ->
+                                Redacted(widthFraction = bars[i], height = heights[i])
+                            }
+                        }
+                    }
                 }
-            }
-            }
             }
         }
     }
@@ -877,24 +910,19 @@ private fun Redacted(widthFraction: Float, height: Dp) {
 
 @Composable
 private fun SeverityChip(severity: Severity) {
-    val (label, tint) = when (severity) {
-        Severity.HIGH -> "Costly" to MaterialTheme.colorScheme.primary
-        Severity.MEDIUM -> "Worth checking" to MaterialTheme.colorScheme.onSurfaceVariant
+    val scheme = MaterialTheme.colorScheme
+    val (label, container, content) = when (severity) {
+        Severity.HIGH -> Triple("Costly", scheme.primaryContainer, scheme.onPrimaryContainer)
+        Severity.MEDIUM -> Triple("Worth checking", scheme.tertiaryContainer, scheme.onTertiaryContainer)
     }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(width = 8.dp, height = 8.dp)
-                .background(tint, RoundedCornerShape(2.dp))
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = tint,
-            modifier = Modifier.padding(start = 8.dp),
-        )
-    }
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = content,
+        modifier = Modifier
+            .background(container, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }
 
 /** Where the camera app writes a page. One file, reused and deleted after each read. */

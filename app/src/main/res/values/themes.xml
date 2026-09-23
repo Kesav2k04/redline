@@ -5,6 +5,6 @@
          was #FAFAFA in both modes, so a dark-mode phone flashed white on every cold start
          before the ink screen arrived. -->
     <style name="Theme.Redline" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:windowBackground">@color/page</item>
     </style>
 </resources>
