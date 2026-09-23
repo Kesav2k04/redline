@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import dev.kesav.redline.ui.severitySplit
+import dev.kesav.redline.ui.unlockLabel
 import org.junit.Test
 
 /**
@@ -142,5 +143,14 @@ class CountsTest {
         )
         assertEquals(2, scanned.flaggedClauses)
         assertEquals(1, scanned.highClauses)
+    }
+
+    @Test
+    fun `the unlock button has a singular`() {
+        // sellable opens at two flagged clauses, so one is the smallest offer the
+        // button can make, and it used to read "Show the other 1 clauses".
+        assertEquals("Show the other clause for ₹199", unlockLabel(1, "₹199"))
+        assertEquals("Show the other 4 clauses for ₹199", unlockLabel(4, "₹199"))
+        assertEquals("Show the other clause", unlockLabel(1, null))
     }
 }

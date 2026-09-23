@@ -448,10 +448,7 @@ private fun Results(
                         // put two units on one screen and invited a subtraction that
                         // has no sensible answer, at the exact moment someone decides
                         // whether to trust the app with money.
-                        Text(
-                            "Show the other ${state.groups.size - 1} clauses" +
-                                (price?.let { " for $it" } ?: "")
-                        )
+                        Text(unlockLabel(state.groups.size - 1, price))
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -585,6 +582,19 @@ internal fun severitySplit(high: Int, flagged: Int): String = when {
     high == 0 -> "None is in the worst band, and all $flagged still cost you."
     high == 1 -> "One of them is serious."
     else -> "$high of them are serious."
+}
+
+/**
+ * The label on the button that sells the report.
+ *
+ * The count is not always plural. `sellable` opens the paywall at two flagged clauses,
+ * so the smallest offer this button ever makes is one clause, and it read "Show the
+ * other 1 clauses" on every two-clause lease. Every other count on this screen already
+ * had its singular; this one was the exception.
+ */
+internal fun unlockLabel(otherClauses: Int, price: String?): String {
+    val what = if (otherClauses == 1) "the other clause" else "the other $otherClauses clauses"
+    return "Show $what" + (price?.let { " for $it" } ?: "")
 }
 
 /**
