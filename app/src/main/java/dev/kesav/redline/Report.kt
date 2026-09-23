@@ -63,6 +63,54 @@ object Report {
         }.trim()
     }
 
+    /** Subject for the message to the landlord: a request, not an alarm. */
+    const val LETTER_SUBJECT = "A few changes before I sign"
+
+    /**
+     * A message to the landlord asking for each fix, one clause at a time.
+     *
+     * The report above is for the tenant and whoever advises them: it quotes the clause and
+     * says why it costs money. The landlord already has the lease and does not need to be
+     * told it is unfair, so this carries only where to look and what to change, in the
+     * polite first person of someone who still wants the flat. Null when nothing was found,
+     * because an empty list of requests is not a message anyone should send.
+     */
+    fun letter(state: ScanState.Scanned): String? {
+        if (state.findings.isEmpty()) return null
+        val byClause = state.findings.groupBy { it.clause.index }
+        return buildString {
+            appendLine("Hello,")
+            appendLine()
+            appendLine(
+                "Thank you for sending the lease. Before I sign, I would like to ask for " +
+                    if (byClause.size == 1) "one change:" else "a few changes:"
+            )
+            appendLine()
+            for (group in byClause.values) {
+                appendLine(where(group.first().clause.text))
+                for (ask in group.map { it.ask }.filter { it.isNotBlank() }.distinct()) {
+                    appendLine("- ${ask.replaceFirstChar { it.uppercase() }}")
+                }
+                appendLine()
+            }
+            appendLine("Could you let me know which of these you can agree to? I am happy to talk them through.")
+            appendLine()
+            append("Thank you")
+        }
+    }
+
+    /**
+     * How the letter points at a clause: by its own number when the lease numbers it, and
+     * otherwise by its opening words, which is how anyone finds an unnumbered paragraph.
+     */
+    internal fun where(text: String): String {
+        val flat = collapse(text)
+        OWN_NUMBER.find(flat)?.let { return "Clause ${it.groupValues[1]}" }
+        val words = flat.split(" ")
+        val opening = words.take(6).joinToString(" ").trimEnd(',', ';', ':', '.')
+        return if (words.size > 6) "The clause starting \"$opening...\"" else "The clause \"$opening\""
+    }
+
     private fun label(severity: Severity): String = when (severity) {
         Severity.HIGH -> "COSTLY"
         Severity.MEDIUM -> "WORTH CHECKING"
@@ -88,7 +136,9 @@ object Report {
         return "Clause ${own.groupValues[1]}: ${flat.substring(own.range.last + 1)}"
     }
 
-    private val OWN_NUMBER = Regex("^(\\d+(?:\\.\\d+)*)[.)]\\s+")
+    // "4." and "4)" always, and a bare "4.2" when a capitalised word follows it, which is
+    // how most leases number sub-clauses. "30 days notice" stays quoted as written.
+    private val OWN_NUMBER = Regex("^(\\d+(?:\\.\\d+)*)(?:[.)]\\s+|\\s+(?=[A-Z]))")
 
     private const val DISCLAIMER =
         "Found with Redline, which matches clauses against a fixed set of rules. " +
