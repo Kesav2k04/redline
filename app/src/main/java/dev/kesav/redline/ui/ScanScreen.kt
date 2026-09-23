@@ -440,9 +440,6 @@ private fun Results(
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     } else {
-                        // "findings", not a bare number. The heading counts clauses and
-                        // this counts findings, and without the noun the two numbers
-                        // read as a contradiction.
                         // Clauses, because the heading counts clauses. Offering
                         // "18 more findings" under a heading reading "11 of 16 clauses"
                         // put two units on one screen and invited a subtraction that
