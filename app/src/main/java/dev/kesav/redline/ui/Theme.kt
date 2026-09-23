@@ -48,6 +48,12 @@ private val Light = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = RedTint,
     onPrimaryContainer = Color(0xFF7A140F),
+    // Secondary is what progress tracks, switches and filter chips reach for. Left unset
+    // it was the baseline violet, and the first progress bar drew a lilac track.
+    secondary = InkMuted,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFE7E9EE),
+    onSecondaryContainer = Ink,
     tertiary = Amber,
     onTertiary = Color.White,
     tertiaryContainer = AmberTint,
@@ -76,6 +82,10 @@ private val Dark = darkColorScheme(
     onPrimary = Ink,
     primaryContainer = RedTintDark,
     onPrimaryContainer = Color(0xFFFFB4AB),
+    secondary = PaperMuted,
+    onSecondary = Ink,
+    secondaryContainer = CardDarkHigh,
+    onSecondaryContainer = Paper,
     tertiary = AmberDark,
     onTertiary = Ink,
     tertiaryContainer = AmberTintDark,
