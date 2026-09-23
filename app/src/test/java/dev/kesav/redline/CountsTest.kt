@@ -153,4 +153,18 @@ class CountsTest {
         assertEquals("Show the other 4 clauses for ₹199", unlockLabel(4, "₹199"))
         assertEquals("Show the other clause", unlockLabel(1, null))
     }
+
+    @Test
+    fun `the readme quotes the heading the sample lease actually produces`() {
+        // README.md states "11 of 16 clauses will cost you money" in the body and in
+        // the alt text on the locked screenshot. The eleven was pinned here; the
+        // sixteen was not, so a change to the splitter could have made the README
+        // describe a screen that no longer exists.
+        val scanned = scanSample()
+        assertEquals(
+            "the heading the README quotes no longer matches the fixture",
+            "11 of 16 clauses will cost you money",
+            "${scanned.flaggedClauses} of ${scanned.clauseCount} clauses will cost you money",
+        )
+    }
 }
