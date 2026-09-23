@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class PageTextTest {
 
@@ -51,7 +52,7 @@ class PageTextTest {
         val text = PageText.assemble(
             listOf(listOf("The Landlord may deduct the following:", "(a) painting charges of Rs 5,000."))
         )
-        assertEquals("The Landlord may deduct the following:\n(a) painting charges of Rs 5,000.", text)
+        assertEquals("The Landlord may deduct the following:\n\n(a) painting charges of Rs 5,000.", text)
     }
 
     @Test
@@ -70,5 +71,53 @@ class PageTextTest {
         assertEquals(1, clauses.size)
         assertTrue(clauses[0].text.contains("payment."))
         assertTrue(findings.isNotEmpty())
+    }
+
+    @Test
+    fun `wrapped lines come back as paragraphs`() {
+        val page = "RESIDENTIAL LEASE AGREEMENT\nThis agreement is made between the Landlord\nand the Tenant.\n" +
+            "1. Term. The term shall be eleven\nmonths.\n2. Rent. The rent shall be paid on the\nfifth day."
+        assertEquals(
+            "RESIDENTIAL LEASE AGREEMENT\n\nThis agreement is made between the Landlord and the Tenant.\n\n" +
+                "1. Term. The term shall be eleven months.\n\n2. Rent. The rent shall be paid on the fifth day.",
+            PageText.assemble(listOf(listOf(page))),
+        )
+    }
+
+    @Test
+    fun `a wrapped line that starts with a number is not a new clause`() {
+        val page = "4. The deposit shall be refunded within\n90 days of the Tenant vacating the premises."
+        assertEquals(1, ClauseSplitter.split(PageText.assemble(listOf(listOf(page)))).size)
+    }
+
+    @Test
+    fun `a PDF of the sample lease reads exactly like the pasted sample`() {
+        // The same lease, typeset: every paragraph hard-wrapped near 70 characters, the
+        // page break falling mid-clause, a page number on each page. The PDF path has to
+        // find the same clauses and the same findings as pasting the text, or the count
+        // on the results screen depends on how the lease arrived.
+        val sample = File("src/main/assets/sample_lease.txt").readText().replace("\r\n", "\n")
+        val wrapped = sample.split(Regex("\n{2,}")).joinToString("\n") { para ->
+            para.trim().split(' ').fold(mutableListOf("")) { lines, word ->
+                if (lines.last().length + word.length > 70) lines += word
+                else lines[lines.lastIndex] = (lines.last() + " " + word).trim()
+                lines
+            }.joinToString("\n")
+        }
+        val lines = wrapped.lines()
+        val half = lines.size / 2 + 3
+        val pages = listOf(
+            listOf(lines.take(half).joinToString("\n") + "\nPage 1 of 2"),
+            listOf(lines.drop(half).joinToString("\n") + "\nPage 2 of 2"),
+        )
+
+        val pasted = ClauseSplitter.split(sample)
+        val read = ClauseSplitter.split(PageText.assemble(pages))
+
+        assertEquals(pasted.map { it.text }, read.map { it.text })
+        assertEquals(
+            Scanner.scan(pasted).map { it.ruleId to it.headline },
+            Scanner.scan(read).map { it.ruleId to it.headline },
+        )
     }
 }

@@ -15,7 +15,7 @@ object ClauseSplitter {
     private const val LONG_BLOCK = 400
 
     // 1. / 1.1 / 1.1.1 / (a) / (iv) / Section 4 / ARTICLE II / 7)
-    private val numbering = Regex(
+    internal val numbering = Regex(
         """^\s*(\(?\d+(\.\d+)*[.)]?|\([a-z]{1,3}\)|\([ivxl]{1,5}\)|(?i:section|article|clause)\s+[\dIVXL]+\.?)\s+"""
     )
 
