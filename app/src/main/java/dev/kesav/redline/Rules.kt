@@ -131,8 +131,8 @@ private val patterns = listOf(
         unit = PERCENT, atLeast = 3,
         near = Regex("\\b(?:penalty|penal|charge|fee|fine|surcharge|interest)\\w*"), reach = 40,
         headline = { "Late payment penalty of $it percent" },
-        reason = "A penalty this size compounds quickly. Two percent a month is the usual " +
-            "ceiling in residential agreements.",
+        reason = "A penalty this size compounds quickly, and it lands on top of rent that " +
+            "is already owed.",
         ask = "a late fee of no more than 2 percent a month, starting only after five days of grace",
     ),
     Pattern(
@@ -141,7 +141,7 @@ private val patterns = listOf(
         unit = PERCENT, atLeast = 12,
         near = Regex("\\binterest\\b(?![ -]?free)"), reach = 60,
         headline = { "Interest charged at $it percent a year" },
-        reason = "That is above what a bank charges on an unsecured loan.",
+        reason = "Compare it with what a bank charges for a personal loan.",
         ask = "interest on late sums at a bank's lending rate, or none at all",
     ),
     Pattern(
@@ -151,13 +151,22 @@ private val patterns = listOf(
         reason = "Compare it against what your bank charges you for the same event.",
         ask = "a returned-payment fee no higher than what the bank actually charges",
     ),
+    // The caps named in the reason, each read at its source on 24 Sep 2026:
+    // India, Model Tenancy Act 2021, two months for residential premises (a model law the
+    //   states adopt): https://prsindia.org/billtrack/the-model-tenancy-act-2021
+    // England, up to five weeks' rent where the year's rent is under 50,000 pounds:
+    //   https://www.gov.uk/private-renting/deposits
+    // California, one month since 1 July 2024 (AB 12):
+    //   https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB12
+    // New York, one month: https://ag.ny.gov/publications/residential-tenants-rights-guide
     Pattern(
         id = "deposit-size", topic = "Your deposit", severity = Severity.HIGH,
         all = listOf(Regex("\\b(?:deposit)")),
         unit = MONTHS, atLeast = 4, near = Regex("\\bdeposit"),
         headline = { "Deposit equal to $it months rent" },
-        reason = "Several states cap residential deposits at two or three months. This is " +
-            "money you cannot touch for the whole term.",
+        reason = "India's Model Tenancy Act sets two months for a home, England caps most " +
+            "deposits at five weeks' rent, and California and New York at one month. This " +
+            "is money you cannot touch for the whole term.",
         ask = "a deposit of no more than two months rent",
     ),
     Pattern(
@@ -180,14 +189,15 @@ private val patterns = listOf(
         id = "sole-discretion", topic = "Who decides", severity = Severity.HIGH,
         all = listOf(Regex("\\b(?:sole discretion|absolute discretion)")),
         headline = { "The landlord alone decides what to deduct" },
-        reason = "Sole discretion means the amount is not open to challenge on its merits.",
+        reason = "Sole discretion leaves the amount to the landlord's judgement, with " +
+            "nothing in the lease to measure it against.",
         ask = "deductions limited to damage beyond normal wear, each one itemised with a receipt",
     ),
     Pattern(
         id = "forfeiture", topic = "Who decides", severity = Severity.HIGH,
         all = listOf(Regex("\\b(?:forfeit)")),
         headline = { "Money can be forfeited outright" },
-        reason = "Forfeiture is a penalty, not compensation for a loss anyone has to prove.",
+        reason = "Forfeiture takes the money outright, without anyone having to show a loss.",
         ask = "forfeiture replaced by deductions for an actual loss, shown with receipts",
     ),
     Pattern(
