@@ -27,7 +27,14 @@ object Numbers {
         "lakhs" to 100_000, "crore" to 10_000_000, "crores" to 10_000_000,
     )
 
-    private val token = Regex("""[a-z0-9]+""")
+    // Words, numerals and the percent sign. A numeral keeps its thousands separators
+    // and its decimal point: splitting "5,000" at the comma used to read it as 5 + 000,
+    // and "1.5" as 1 + 5, which turned a one and a half percent late fee into fifteen.
+    // "%" is its own token because leases, and every PDF, write "10%" far more often
+    // than "ten percent", and a tokenizer that dropped it made every percentage rule
+    // blind to the commonest way the number is written.
+    private val token = Regex("""[a-z]+|\d+(?:,\d+)*(?:\.\d+)?|%""")
+    private val numeral = Regex("""\d+(?:,\d+)*(?:\.\d+)?""")
 
     /**
      * The quantity stated immediately before [unit], or null when there is none.
@@ -38,8 +45,15 @@ object Numbers {
      */
     fun valueBefore(text: String, unit: Regex): Int? = quantities(text, unit).firstOrNull()?.value
 
-    /** A stated quantity, and the character span from its first number word to its unit. */
-    data class Quantity(val value: Int, val at: IntRange)
+    /**
+     * A stated quantity, and the character span from its first number word to its unit.
+     *
+     * [value] is rounded down, which keeps every "at least N" test exact for whole N:
+     * 2.5 percent is below a threshold of 3 and so is 2. [shown] is the number as the
+     * lease wrote it, so a headline says 12.5 percent rather than a rounded figure the
+     * reader cannot find in the quoted clause.
+     */
+    data class Quantity(val value: Int, val at: IntRange, val shown: String = value.toString())
 
     /**
      * Every quantity in [text] expressed in [unit], in reading order.
@@ -53,15 +67,24 @@ object Numbers {
         val tokens = token.findAll(text.lowercase()).toList()
         val found = mutableListOf<Quantity>()
         for (i in tokens.indices) {
-            if (!unit.matches(tokens[i].value)) continue
+            // "%" and "per cent" are spellings of the unit, not separate words. For the
+            // two-word form the number run starts before "per".
+            val (word, first) = when {
+                tokens[i].value == "%" -> "percent" to i
+                tokens[i].value == "cent" && tokens.getOrNull(i - 1)?.value == "per" -> "percent" to i - 1
+                else -> tokens[i].value to i
+            }
+            if (!unit.matches(word)) continue
             val run = mutableListOf<String>()
-            var j = i - 1
+            var j = first - 1
             while (j >= 0 && isNumberWord(tokens[j].value)) {
                 run += tokens[j].value
                 j--
             }
-            val value = parse(run.asReversed()) ?: continue
-            found += Quantity(value, tokens[j + 1].range.first..tokens[i].range.last)
+            val words = run.asReversed()
+            val value = parse(words) ?: continue
+            val shown = words.singleOrNull()?.takeIf { numeral.matches(it) }?.replace(",", "") ?: value.toString()
+            found += Quantity(value, tokens[j + 1].range.first..tokens[i].range.last, shown)
         }
         return found
     }
@@ -78,7 +101,7 @@ object Numbers {
                 w in tens -> { current += tens.getValue(w); seen = true }
                 w == "hundred" -> { current = maxOf(current, 1) * 100; seen = true }
                 w in scales -> { total += maxOf(current, 1) * scales.getValue(w); current = 0; seen = true }
-                w.all(Char::isDigit) -> { current += w.toInt(); seen = true }
+                numeral.matches(w) -> { current += w.replace(",", "").toDouble().toInt(); seen = true }
                 else -> return if (seen) total + current else null
             }
         }
@@ -86,5 +109,5 @@ object Numbers {
     }
 
     private fun isNumberWord(w: String) =
-        w == "and" || w in units || w in tens || w in scales || w.all(Char::isDigit)
+        w == "and" || w in units || w in tens || w in scales || numeral.matches(w)
 }

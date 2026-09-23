@@ -2,6 +2,7 @@ package dev.kesav.redline
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -82,5 +83,26 @@ class ScannerTest {
     fun `an ordinary sentence produces nothing`() {
         val clause = Clause(0, "The rent shall be paid on or before the fifth day of each calendar month.")
         assertEquals(emptyList<Finding>(), Scanner.scan(listOf(clause)))
+    }
+
+    @Test
+    fun `the way a PDF writes a percentage is caught`() {
+        val late = Clause(0, "If the rent is paid late, a penalty of 10% of the monthly rent shall be charged.")
+        assertEquals(
+            "Late payment penalty of 10 percent",
+            Scanner.scan(listOf(late)).single { it.ruleId == "late-fee" }.headline,
+        )
+
+        val interest = Clause(1, "Any overdue amount shall carry interest at 24.5 per cent per annum.")
+        assertEquals(
+            "Interest charged at 24.5 percent a year",
+            Scanner.scan(listOf(interest)).single { it.ruleId == "interest-rate" }.headline,
+        )
+    }
+
+    @Test
+    fun `a small decimal fee stays below the line`() {
+        val fine = Clause(0, "If the rent is paid late, a penalty of 1.5% of the monthly rent shall be charged.")
+        assertTrue(Scanner.scan(listOf(fine)).none { it.ruleId == "late-fee" })
     }
 }

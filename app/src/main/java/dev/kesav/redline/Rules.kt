@@ -48,7 +48,7 @@ private class Pattern(
      * clause routinely puts a subordinate clause between the two.
      */
     val reach: Int = 120,
-    val headline: (Int?) -> String,
+    val headline: (String?) -> String,
     val reason: String,
 ) {
     fun check(clause: Clause): Finding? {
@@ -56,12 +56,13 @@ private class Pattern(
         if (all.any { !it.containsMatchIn(text) }) return null
         if (none.any { it.containsMatchIn(text) }) return null
 
-        var value: Int? = null
+        var shown: String? = null
         if (unit != null) {
-            value = quantity(text) ?: return null
-            if (atLeast != null && value < atLeast) return null
+            val q = quantity(text) ?: return null
+            if (atLeast != null && q.value < atLeast) return null
+            shown = q.shown
         }
-        return Finding(clause, id, topic, headline(value), reason, severity)
+        return Finding(clause, id, topic, headline(shown), reason, severity)
     }
 
     /**
@@ -76,9 +77,9 @@ private class Pattern(
      * With an anchor set, a rule whose anchor is absent does not fire. Falling back to
      * the whole clause is exactly the behaviour that produced the false headlines.
      */
-    private fun quantity(text: String): Int? {
+    private fun quantity(text: String): Numbers.Quantity? {
         val found = Numbers.quantities(text, unit ?: return null)
-        val anchor = near ?: return found.firstOrNull()?.value
+        val anchor = near ?: return found.firstOrNull()
         val anchors = anchor.findAll(text).map { it.range }.toList()
         if (anchors.isEmpty()) return null
         return found
@@ -86,7 +87,6 @@ private class Pattern(
             .filter { (_, d) -> d <= reach }
             .minByOrNull { (_, d) -> d }
             ?.first
-            ?.value
     }
 
     private fun gap(a: IntRange, b: IntRange): Int = when {

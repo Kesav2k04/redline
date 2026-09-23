@@ -57,4 +57,31 @@ class NumbersTest {
         assertEquals(6, Numbers.valueBefore("notice of six months", months))
         assertNull(Numbers.valueBefore("rent for the unexpired portion of the period in months", months))
     }
+
+    @Test
+    fun `the percent sign and per cent are the unit`() {
+        assertEquals(10, Numbers.valueBefore("a late fee of 10% of the rent", percent))
+        assertEquals(10, Numbers.valueBefore("a late fee of 10 % of the rent", percent))
+        assertEquals(10, Numbers.valueBefore("a late fee of ten per cent of the rent", percent))
+    }
+
+    @Test
+    fun `a decimal is one number, rounded down, and shown as written`() {
+        val q = Numbers.quantities("interest at 12.5% per annum", percent).single()
+        assertEquals(12, q.value)
+        assertEquals("12.5", q.shown)
+        // It used to read 1 + 5.
+        assertEquals(1, Numbers.valueBefore("a charge of 1.5 percent a month", percent))
+    }
+
+    @Test
+    fun `thousands separators do not split a number`() {
+        assertEquals(5000, Numbers.valueBefore("any repair below 5,000 rupees", rupees))
+        assertEquals(100000, Numbers.valueBefore("a deposit of 1,00,000 rupees", rupees))
+    }
+
+    @Test
+    fun `a number run into its unit is still read`() {
+        assertEquals(30, Numbers.valueBefore("refunded within 30days of vacating", days))
+    }
 }
