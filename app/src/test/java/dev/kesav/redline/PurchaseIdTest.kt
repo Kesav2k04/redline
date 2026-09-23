@@ -46,11 +46,15 @@ class PurchaseIdTest {
      * existing buyer silently lost their purchase. This pins the actual bytes.
      *
      * If this fails, the identifier changed, and that is a migration, not a refactor.
+     *
+     * The salt was set to "redline:v1:" once, before the first public release, when no
+     * build carrying the earlier salt had ever been published. It must never change
+     * again: every restore on every installed copy depends on these bytes.
      */
     @Test
     fun `the mapping itself is frozen`() {
         assertEquals(
-            "b6c920505644bd9bbdb56d94b61378b6",
+            "f8cac82afe3e4c41fcf674f0b38edd70",
             Billing.purchaseId("a1b2c3d4e5f60718"),
         )
     }

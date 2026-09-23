@@ -97,7 +97,7 @@ object Billing {
         if (raw.isNullOrBlank() || raw == SHARED_BAD_ANDROID_ID) return null
 
         val digest = MessageDigest.getInstance("SHA-256")
-            .digest("redline:$raw".toByteArray(Charsets.UTF_8))
+            .digest("redline:v1:$raw".toByteArray(Charsets.UTF_8))
 
         return digest.take(16).joinToString("") { "%02x".format(it) }
     }
