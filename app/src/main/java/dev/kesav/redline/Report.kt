@@ -52,6 +52,9 @@ object Report {
                 for (f in group) {
                     appendLine("   ${label(f.severity)}  ${f.headline}")
                     appendLine("   ${f.reason}")
+                    // The line the reader actually sends. Without it the message lists
+                    // what is wrong and leaves the landlord to guess what would fix it.
+                    if (f.ask.isNotBlank()) appendLine("   Ask for ${f.ask}.")
                     appendLine()
                 }
             }
