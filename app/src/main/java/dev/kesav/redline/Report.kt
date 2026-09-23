@@ -47,7 +47,7 @@ object Report {
             appendLine()
 
             byClause.values.forEachIndexed { i, group ->
-                appendLine("${i + 1}) ${collapse(group.first().clause.text)}")
+                appendLine("${i + 1}) ${quote(group.first().clause.text)}")
                 appendLine()
                 for (f in group) {
                     appendLine("   ${label(f.severity)}  ${f.headline}")
@@ -72,6 +72,20 @@ object Report {
      */
     private fun collapse(text: String): String =
         text.replace(Regex("\\s+"), " ").trim()
+
+    /**
+     * The lease's own clause number, when it has one, becomes a label instead of being
+     * quoted straight after the list number. "1) 3. Late payment" read as a numbering
+     * accident in the message a tenant sends; "1) Clause 3: Late payment" says which
+     * clause to turn to. A clause that merely starts with a quantity keeps its text.
+     */
+    private fun quote(text: String): String {
+        val flat = collapse(text)
+        val own = OWN_NUMBER.find(flat) ?: return flat
+        return "Clause ${own.groupValues[1]}: ${flat.substring(own.range.last + 1)}"
+    }
+
+    private val OWN_NUMBER = Regex("^(\\d+(?:\\.\\d+)*)[.)]\\s+")
 
     private const val DISCLAIMER =
         "Found with Redline, which matches clauses against a fixed set of rules. " +

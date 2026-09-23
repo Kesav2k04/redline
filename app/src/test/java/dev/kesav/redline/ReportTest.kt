@@ -38,7 +38,7 @@ class ReportTest {
         val text = Report.build(state)
         assertTrue(
             "hard wrapping survived into the message",
-            text.contains("4. Security deposit. The Tenant shall deposit ten months rent."),
+            text.contains("Clause 4: Security deposit. The Tenant shall deposit ten months rent."),
         )
         assertFalse("the raw newlines leaked through", text.contains("deposit.\nThe Tenant"))
     }
@@ -86,7 +86,7 @@ class ReportTest {
     @Test
     fun `a clause with several findings is quoted once, not once per finding`() {
         val text = Report.build(sample())
-        val deposit = "4. Security deposit. The Tenant shall deposit a sum equivalent to ten months rent"
+        val deposit = "Clause 4: Security deposit. The Tenant shall deposit a sum equivalent to ten months rent"
         assertEquals(
             "the deposit paragraph was repeated in the message",
             1,
@@ -101,5 +101,27 @@ class ReportTest {
         val onDeposit = state.findings.filter { it.clause.text.contains("Security deposit") }
         assertTrue("fixture no longer has a multi-finding clause", onDeposit.size >= 3)
         for (f in onDeposit) assertTrue("dropped: ${f.headline}", text.contains(f.headline))
+    }
+
+    @Test
+    fun `the lease's own clause number is labelled, not doubled`() {
+        // The rehearsal footage of the share sheet read "1) 3. Late payment", which looks
+        // like a numbering accident in exactly the message a tenant sends a landlord.
+        val text = Report.build(sample())
+        assertFalse(
+            "a list number is followed by the clause's own number",
+            Regex("(?m)^\\d+\\) \\d+[.)] ").containsMatchIn(text),
+        )
+        assertTrue("the lease's clause number was lost", text.contains("Clause 3: Late payment"))
+    }
+
+    @Test
+    fun `a clause that starts with a quantity is not given a clause number`() {
+        val clause = Clause(0, "30 days notice is required before the Tenant vacates.")
+        val state = ScanState.Scanned(
+            clauseCount = 1,
+            findings = listOf(Finding(clause, "r", "Moving out", "h", "why", Severity.MEDIUM)),
+        )
+        assertTrue(Report.build(state).contains("1) 30 days notice is required"))
     }
 }
