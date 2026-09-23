@@ -84,6 +84,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -765,7 +768,10 @@ private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
         // free by looking down two lines.
         buildString {
             append("${group.worst.name.lowercase()} risk, $problems. ")
-            for (f in group.findings) append("${f.headline}. ${f.reason} ")
+            for (f in group.findings) {
+                append("${f.headline}. ${f.reason} ")
+                if (f.ask.isNotBlank()) append("Ask for ${f.ask}. ")
+            }
             append("The clause reads: ${group.clause.text}")
         }
     } else {
@@ -849,6 +855,7 @@ private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = scheme.onSurfaceVariant,
                                     )
+                                    if (f.ask.isNotBlank()) Ask(f.ask, Modifier.padding(top = 6.dp))
                                 }
                             }
                             // Quoted once at the foot of the card, however many rules it
@@ -873,6 +880,35 @@ private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
                 }
             }
         }
+    }
+}
+
+/**
+ * What to ask the landlord for, set apart from the reason above it.
+ *
+ * The reason says what is wrong and this says what to do about it, so it sits on its own
+ * tint rather than as a third grey line the eye has learned to skip.
+ */
+@Composable
+private fun Ask(ask: String, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        color = scheme.surfaceContainerHighest,
+        shape = MaterialTheme.shapes.small,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = scheme.onSurface)) {
+                    append("Ask for ")
+                }
+                append(ask)
+                append(".")
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurface,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+        )
     }
 }
 
