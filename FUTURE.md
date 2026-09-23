@@ -17,24 +17,37 @@ contribute a rule without writing Kotlin.
 currently prose in a reason string. It should be a table, keyed by state, so the app can
 say which limit a clause actually breaches.
 
-**Optical character recognition.** ML Kit Text Recognition over a photo of a page would
-cover leases that only exist on paper. It is free, on-device and Apache licensed. It was
-left out because the input path had to be certain before the clever part got attention.
+**Deadline reminders.** A lease that renews itself unless notice is given sixty days
+before the end already trips the auto-renewal rule. Reading the end date and the notice
+period would let the app put one reminder in the calendar, through the calendar app's own
+insert screen, so no permission is needed.
 
-**Export.** A shareable summary the tenant can send to the landlord, or to a lawyer,
-with the clauses and the reasons.
+**Other languages.** The clause splitter and the number reader assume English. A lease
+in Hindi or Tamil would need its own number words, headings and rules.
+
+## Built since this list was first written
+
+**Reading PDFs and paper.** The original entry below said no: Android could only
+rasterise PDF pages, and the libraries that extract text were heavy or AGPL. Android 15
+added a text layer to `PdfRenderer`, which covers digital PDFs on current phones. Scanned
+PDFs, older phones and photographs of paper go through ML Kit's bundled text recognition,
+which is on-device and Apache licensed. The column and hyphen problems were real, so
+imported pages are rebuilt into paragraphs and a test holds a PDF to the same findings as
+the same lease pasted.
+
+**Export, then a letter.** The report goes out through the share sheet with each clause
+quoted. Every rule now also says what to ask for, and a separate letter asks the landlord
+for those changes without quoting the scanner's verdicts back at them.
 
 ## Deliberately not building
 
-**A PDF reader.** Android has no text extraction: `PdfRenderer` only rasterises pages.
-The options are PDFBox-Android, which is heavy and slow to initialise, or iText, which
-is AGPL and would change the licence of this repository. Real lease PDFs also arrive
-hyphenated and column-shuffled, and a scanned one has no text layer at all. Shared and
-pasted text covers the same need with none of that.
+**A bundled PDF library.** PDFBox-Android is heavy and slow to initialise, and iText is
+AGPL, which would change the licence of this repository. The platform text layer plus
+on-device OCR covers the same ground without either.
 
 **An account system.** Nothing here needs to know who you are. A lease is a private
-document and the strongest privacy promise is the one enforced by the absence of a
-network call.
+document, and the strongest privacy promise is one the code enforces: the lease never
+touches the network. The only traffic is RevenueCat's, for the price and the purchase.
 
 **Cloud analysis or a language model.** It would cost money per scan, require sending
 somebody's lease to a server, and produce answers nobody can check. The measurement in

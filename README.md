@@ -4,9 +4,10 @@ Reads a rental lease and points at the clauses that will cost you money.
 
 Built by a student for the Next Gen Award at RevenueCat Shipaton 2026.
 
-Everything runs on the device. No account, no upload, no network call at runtime. You
-paste the lease or share it from whatever app it arrived in, and the text never leaves
-the phone.
+Everything that touches the lease runs on the device. No account and no upload. Open the
+PDF your landlord sent, photograph a paper copy, or paste the text: reading, OCR and the
+scan all happen on the phone. The only network traffic is RevenueCat's, to show the price
+and take the payment, and it never carries a word of the lease.
 
 <p>
   <img src="docs/locked.png" alt="Results screen. Eleven of sixteen clauses flagged, the first clause readable in full, the rest redacted behind a one-time purchase." width="46%">
@@ -14,9 +15,9 @@ the phone.
 </p>
 
 The scan always runs to completion and the count is always honest. The first flagged
-clause is free, in full, with the sentence it came from. What the purchase buys is the
-other ten clauses and the eighteen problems inside them, and a way to send the list to
-whoever can do something about it.
+clause is free, in full, with the sentence it came from and what to ask for instead.
+What the purchase buys is the other ten clauses and the eighteen problems inside them,
+the change to ask for on each, and a letter to the landlord that asks for all of them.
 
 ## Why it works the way it does
 
@@ -213,6 +214,10 @@ services to sign up for, and no `local.properties` entries beyond `sdk.dir`. Ope
 folder in Android Studio writes that line for you; from a bare terminal, an `ANDROID_HOME`
 pointing at the SDK does the same job and the file can stay absent.
 
+The release APK is about 42 MB. Most of that is the on-device OCR model, shipped for three
+processor types, and code that R8 would normally shrink: the release build stays
+debuggable because RevenueCat's Test Store requires it.
+
 To exercise the purchase flow, add your own key:
 
 ```
@@ -221,10 +226,38 @@ revenuecat.apiKey=goog_yourkeyhere
 
 ## How the text gets in
 
-- Paste it.
-- Share to Redline from any app (`ACTION_SEND`, `text/plain`).
-- Select text anywhere in Android and pick Redline (`ACTION_PROCESS_TEXT`).
+A lease usually arrives as a PDF or on paper, so those come first.
+
+- **Open the PDF.** On Android 15 and later the text layer is read directly with
+  `PdfRenderer`. A scanned PDF, or any PDF on an older phone, is rendered page by page and
+  read with ML Kit's bundled text recognition, which runs on the phone and needs no
+  download. Up to 30 pages. The file is copied to the app's cache for the renderer and
+  deleted as soon as reading finishes.
+- **Photograph it**, a page at a time. The camera app hands the picture back through a
+  `FileProvider`, so Redline asks for no camera permission.
+- **Open with Redline** or **share to Redline** from Gmail, WhatsApp or Files, for a PDF,
+  an image or plain text (`ACTION_VIEW`, `ACTION_SEND`).
+- Paste it, or select text anywhere in Android and pick Redline (`ACTION_PROCESS_TEXT`).
 - Or tap "Try it on a sample lease".
+
+Imported pages are rebuilt into paragraphs before the scan: page numbers and running
+headers are dropped, wrapped lines are rejoined, and headings and numbered clauses start
+new paragraphs. A test holds the PDF path to the pasted path, so the same lease gives the
+same findings however it arrived.
+
+## What it asks for
+
+A finding that stops at "this is bad" leaves the reader with a problem and no next move.
+Every rule carries the change to ask for: "a deposit of no more than two months rent",
+"at least 24 hours written notice before any entry, except in an emergency". It appears
+on the card under the reason.
+
+After purchase, **Ask the landlord for these changes** drafts a short letter from those
+asks, grouped by clause number, in the first person of someone who still wants the flat.
+It carries no verdicts and no quotes of the scanner's reasons, because the landlord wrote
+the lease and does not need to be told it is unfair. It leaves through the share sheet,
+so the app never holds an address or a copy. The full report, with every clause quoted
+and every reason, still goes to a parent or an adviser from the same screen.
 
 ## Splitting a lease into clauses
 
