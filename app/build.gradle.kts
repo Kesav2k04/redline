@@ -21,6 +21,12 @@ android {
         versionCode = 1
         versionName = "0.1"
 
+        // The text recognition model is native code, about 11 MB per ABI, and every ABI
+        // included is paid for by every download of the one APK on the Release. 32-bit
+        // x86 only ever ran on old emulators; 32-bit ARM stays, because it is still what
+        // the cheapest phones run, and they are the ones a tenant is likely to own.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+
         // Read from local.properties, which is not committed. Absent key means the
         // app still builds and runs from a clean clone, with the paywall locked.
         buildConfigField(
@@ -114,6 +120,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.revenuecat.purchases)
+    implementation(libs.mlkit.text.recognition)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)

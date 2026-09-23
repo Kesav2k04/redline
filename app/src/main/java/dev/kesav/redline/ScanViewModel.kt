@@ -2,8 +2,10 @@ package dev.kesav.redline
 
 import android.app.Activity
 import android.app.Application
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
@@ -11,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -97,6 +101,19 @@ data class ScanUi(
     val busy: Boolean = false,
     val message: String? = null,
     val offer: Package? = null,
+    /** What the reader is waiting on while a PDF or photo is read, or null when idle. */
+    val reading: String? = null,
+    /** Where the text in the field came from, when it came from a file. */
+    val source: String? = null,
+    /**
+     * Pages photographed into the field so far.
+     *
+     * A paper lease is several pages and a camera takes one, so each photo after the
+     * first adds to the text rather than replacing it. Anything else that fills the
+     * field resets this, so a photo taken after loading a PDF starts a new document
+     * instead of being stapled to the end of an unrelated one.
+     */
+    val photoPages: Int = 0,
 )
 
 /**
@@ -114,12 +131,33 @@ data class ScanUi(
 internal fun chooseOffer(types: List<PackageType>): Int? =
     types.indexOf(PackageType.LIFETIME).takeIf { it >= 0 }
 
-class ScanViewModel(app: Application) : AndroidViewModel(app) {
+class ScanViewModel(app: Application, private val saved: SavedStateHandle) : AndroidViewModel(app) {
 
-    private val _ui = MutableStateFlow(ScanUi())
+    private val _ui = MutableStateFlow(
+        ScanUi(
+            text = saved[KEY_TEXT] ?: "",
+            source = saved[KEY_SOURCE],
+            photoPages = saved[KEY_PAGES] ?: 0,
+        )
+    )
     val ui: StateFlow<ScanUi> = _ui.asStateFlow()
 
     init {
+        // Photographing a page hands the screen to the camera app, and a phone short of
+        // memory kills the process behind it. Without this the reader comes back to an
+        // empty field and the two pages they already photographed are gone. The scan
+        // itself is not kept: it is recomputed from the text in well under a second.
+        viewModelScope.launch {
+            _ui.map { Triple(it.text, it.source, it.photoPages) }
+                .distinctUntilChanged()
+                .collect { (text, source, pages) ->
+                    // Saved state crosses a Binder transaction, which fails outright
+                    // somewhere past half a megabyte. A lease that long is not kept.
+                    saved[KEY_TEXT] = text.takeIf { it.length <= MAX_SAVED_CHARS }
+                    saved[KEY_SOURCE] = source
+                    saved[KEY_PAGES] = pages
+                }
+        }
         // Reading the entitlement is a network call, so it lands after the first frame.
         // The screen waits on `entitlementsKnown` rather than assuming that a false
         // `unlocked` means the reader has not paid.
@@ -159,8 +197,65 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(text = text) }
     }
 
+    /** A PDF or photo shared or opened from another app. Same rule as [seed]: once. */
+    fun seedFile(uri: Uri?) {
+        if (uri == null || _ui.value.text.isNotEmpty() || _ui.value.reading != null) return
+        import(uri)
+    }
+
     fun edit(text: String) {
-        _ui.update { it.copy(text = text, state = ScanState.Editing) }
+        // Typing makes it the reader's text, so the note saying which file it came from
+        // stops being true and goes.
+        _ui.update { it.copy(text = text, state = ScanState.Editing, source = null, photoPages = 0) }
+    }
+
+    /**
+     * Reads a PDF, a photo or a text file into the field.
+     *
+     * It fills the field rather than scanning straight away. Text recognition gets the
+     * odd word wrong, and the reader should see what was read before being told what it
+     * costs them; the field is where a misread "10" can be corrected.
+     */
+    fun import(uri: Uri, photo: Boolean = false, after: () -> Unit = {}) {
+        if (_ui.value.reading != null) return after()
+        viewModelScope.launch {
+            _ui.update { it.copy(reading = "Opening the file", message = null) }
+            val result = try {
+                LeaseImport.read(getApplication(), uri) { step ->
+                    _ui.update { it.copy(reading = step) }
+                }
+            } finally {
+                after()
+            }
+            when (result) {
+                is LeaseImport.Result.Failed ->
+                    _ui.update { it.copy(reading = null, message = result.message) }
+
+                is LeaseImport.Result.Read -> _ui.update { ui ->
+                    val adding = photo && ui.photoPages > 0
+                    val pages = if (photo) ui.photoPages + 1 else 0
+                    ui.copy(
+                        text = if (adding) ui.text.trimEnd() + "\n\n" + result.text else result.text,
+                        state = ScanState.Editing,
+                        reading = null,
+                        photoPages = pages,
+                        source = describe(result, pages),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun describe(read: LeaseImport.Result.Read, photoPages: Int): String {
+        val what = when {
+            photoPages > 0 -> if (photoPages == 1) "1 photographed page" else "$photoPages photographed pages"
+            read.kind == LeaseImport.Kind.PDF && read.totalPages > read.pages ->
+                "${read.name ?: "the PDF"}, first ${read.pages} of ${read.totalPages} pages"
+            read.kind == LeaseImport.Kind.PDF ->
+                "${read.name ?: "the PDF"}, ${read.pages} ${if (read.pages == 1) "page" else "pages"}"
+            else -> read.name ?: "the file"
+        }
+        return "Read from $what, on this phone. Check the text, then scan."
     }
 
     fun loadSample() {
@@ -171,7 +266,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                     .bufferedReader()
                     .use { it.readText() }
             }
-            _ui.update { it.copy(text = text, state = ScanState.Editing) }
+            _ui.update { it.copy(text = text, state = ScanState.Editing, source = null, photoPages = 0) }
         }
     }
 
@@ -229,7 +324,18 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun say(message: String) {
+        _ui.update { it.copy(message = message) }
+    }
+
     fun dismissMessage() {
         _ui.update { it.copy(message = null) }
+    }
+
+    private companion object {
+        const val KEY_TEXT = "text"
+        const val KEY_SOURCE = "source"
+        const val KEY_PAGES = "photoPages"
+        const val MAX_SAVED_CHARS = 100_000
     }
 }

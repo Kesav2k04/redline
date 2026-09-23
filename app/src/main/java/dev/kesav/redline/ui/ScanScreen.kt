@@ -1,6 +1,18 @@
 package dev.kesav.redline.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.text.style.TextAlign
+import androidx.core.content.FileProvider
+import android.content.ActivityNotFoundException
+import android.content.pm.PackageManager
+import android.net.Uri
+import java.io.File
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -80,6 +92,7 @@ import dev.kesav.redline.Severity
 @Composable
 fun ScanScreen(
     sharedText: String = "",
+    sharedFile: Uri? = null,
     viewModel: ScanViewModel = viewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
@@ -98,6 +111,26 @@ fun ScanScreen(
     BackHandler(enabled = ui.state is ScanState.Scanned) { viewModel.back() }
 
     LaunchedEffect(sharedText) { viewModel.seed(sharedText) }
+    LaunchedEffect(sharedFile) { viewModel.seedFile(sharedFile) }
+
+    // The system picker, not a storage permission: it hands back one document the reader
+    // chose, which is all this needs, and asks for nothing at install.
+    val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.import(it) }
+    }
+
+    // The camera app writes the photo into this app's cache through a FileProvider, so
+    // there is no camera permission either. The file is deleted once it has been read:
+    // a photo of somebody's lease has no business outliving the scan.
+    val hasCamera = remember(context) {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+    }
+    var photoTarget by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val target = photoTarget ?: return@rememberLauncherForActivityResult
+        val file = pagePhoto(context)
+        if (saved) viewModel.import(target, photo = true) { file.delete() } else file.delete()
+    }
 
     LaunchedEffect(ui.message) {
         ui.message?.let {
@@ -126,6 +159,25 @@ fun ScanScreen(
                 onScan = viewModel::scan,
                 onSample = viewModel::loadSample,
                 onChecks = { showChecks = true },
+                reading = ui.reading,
+                source = ui.source,
+                photoPages = ui.photoPages,
+                onOpen = { openFile.launch(arrayOf("application/pdf", "image/*", "text/plain")) },
+                onPhoto = if (!hasCamera) null else {
+                    {
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.files",
+                            pagePhoto(context),
+                        )
+                        photoTarget = uri
+                        try {
+                            takePhoto.launch(uri)
+                        } catch (e: ActivityNotFoundException) {
+                            viewModel.say("No camera app is available. Take the photo first, then open it here.")
+                        }
+                    }
+                },
                 modifier = content,
             )
 
@@ -222,6 +274,11 @@ private fun Editor(
     onScan: () -> Unit,
     onSample: () -> Unit,
     onChecks: () -> Unit,
+    reading: String?,
+    source: String?,
+    photoPages: Int,
+    onOpen: () -> Unit,
+    onPhoto: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     // Three things this column has to survive: a keyboard covering the lower half, a
@@ -237,26 +294,54 @@ private fun Editor(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Paste your lease, or share the text from any app.",
+            text = "Open the PDF your landlord sent, photograph the paper copy, or paste the text.",
             style = MaterialTheme.typography.bodyLarge,
         )
 
         // The strongest thing about this app was written only in the README. Someone
         // deciding between this and pasting their lease into a chatbot needs it on the
         // screen where they decide, not in a repository they will never open. It also
-        // sets the expectation that this reads text and not a PDF, which was the other
-        // thing people learned only by failing.
+        // used to warn that this read text and not a PDF, the other thing people learned
+        // only by failing. It reads both now, and still uploads neither.
         // The price belongs here, not only on the paywall. Reading a lease into the
         // field is work, and learning the cost only after doing that work is the shape
         // of an ambush even when the number is small. The offering loads over the
         // network and lands after the first frame, so the sentence has to read properly
         // without it.
         Text(
-            text = "It runs on your phone. The text is not uploaded anywhere, and the " +
+            text = "It runs on your phone, reading included. Nothing is uploaded, and the " +
                 (price?.let { "full report is a one-time $it." } ?: "full report is a one-time purchase."),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        if (reading != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text(reading, style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onOpen, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                    Text("Open a PDF or photo", textAlign = TextAlign.Center)
+                }
+                if (onPhoto != null) {
+                    OutlinedButton(onClick = onPhoto, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                        Text(
+                            if (photoPages > 0) "Photograph page ${photoPages + 1}" else "Photograph a page",
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+        }
 
         OutlinedTextField(
             value = text,
@@ -269,9 +354,17 @@ private fun Editor(
             maxLines = 16,
         )
 
+        if (source != null) {
+            Text(
+                text = source,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         Button(
             onClick = onScan,
-            enabled = text.isNotBlank(),
+            enabled = text.isNotBlank() && reading == null,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
             Text("Scan")
@@ -803,3 +896,7 @@ private fun SeverityChip(severity: Severity) {
         )
     }
 }
+
+/** Where the camera app writes a page. One file, reused and deleted after each read. */
+private fun pagePhoto(context: android.content.Context): File =
+    File(context.cacheDir, "pages").apply { mkdirs() }.resolve("page.jpg")
