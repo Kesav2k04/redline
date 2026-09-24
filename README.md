@@ -10,8 +10,9 @@ scan all happen on the phone. The only network traffic is RevenueCat's, to show 
 and take the payment, and it never carries a word of the lease.
 
 <p>
-  <img src="docs/locked.png" alt="Results screen. Eleven of sixteen clauses flagged, the first clause readable in full, the rest redacted behind a one-time purchase." width="46%">
-  <img src="docs/unlocked.png" alt="The same screen after purchase. Every clause readable, with a button to send the list onward." width="46%">
+  <img src="docs/start.png" alt="Start screen. The promise, then three ways in: open a PDF, photograph the pages, or paste the text, with a sample lease to try." width="31%">
+  <img src="docs/locked.png" alt="Report. Eleven of sixteen clauses flagged; the late fee clause is free in full, with what to ask for, and the other ten open with one payment." width="31%">
+  <img src="docs/unlocked.png" alt="The report after purchase. Every clause in full, each with what to ask for, and a button to ask the landlord for the changes." width="31%">
 </p>
 
 The scan always runs to completion and the count is always honest. The first flagged
@@ -189,7 +190,7 @@ Three things are given away on purpose, and each one costs a sale in the short r
 - **The count, in full.** "11 of 16 clauses will cost you money" is the finding. Hiding
   the number would raise conversion and would also make the app worthless to anyone who
   declines, which is most people.
-- **The whole checklist.** "What Redline checks" lists all 38 rules, grouped, before
+- **The whole checklist.** "See all 38 checks" opens every rule, grouped, before
   any money changes hands. The counts are derived from the rule table in
   [`Rules.kt`](app/src/main/java/dev/kesav/redline/Rules.kt), so the screen cannot
   advertise a check the scanner does not run, and `TopicsTest` fails the build if the
@@ -296,7 +297,7 @@ not always the people best served by an app.
   and keep the evidence.
 - A locked finding announces that it is locked and why, so the severity and the count
   are available without paying, exactly as they are on screen.
-- Severity carries a word, "Costly" or "Worth checking", not only a colour.
+- Severity carries a word, "Serious" or "Worth checking", not only a colour.
 - Touch targets are at least 48dp. The editor scrolls and lifts above the keyboard, so
   the Scan button is reachable at 200% font scale.
 - The reveal animation reads `ANIMATOR_DURATION_SCALE` and does nothing when animations
