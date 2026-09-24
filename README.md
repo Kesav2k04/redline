@@ -199,7 +199,7 @@ services to sign up for, and no `local.properties` entries beyond `sdk.dir`. Ope
 folder in Android Studio writes that line for you; from a bare terminal, an `ANDROID_HOME`
 pointing at the SDK does the same job and the file can stay absent.
 
-The release APK is about 40 MB, most of it the on-device OCR model for three processor
+The release APK is about 45 MB, most of it the on-device OCR model for three processor
 types. While it uses RevenueCat's Test Store the release build has to be debuggable,
 which also keeps R8 from shrinking it; a Play Store key turns both back on.
 
