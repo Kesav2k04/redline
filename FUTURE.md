@@ -18,6 +18,13 @@ England and India, each figure quoted from its statute. More US states are the o
 next step, and India would be better served state by state, since the Model Tenancy Act is
 a proposal that Maharashtra, Karnataka and Delhi have not adopted.
 
+Places also need rules of their own, not only limits. "A non-refundable pet fee of $300"
+is unlawful in California, which bars calling any security non-refundable (Civil Code
+1950.5(n)), and in New York, which allows no fee at the start of a tenancy beyond a
+background and credit check (Real Property Law 238-a). The same sentence is ordinary in
+Texas and Illinois, and `intl.tsv` carries all four. A rule that runs only once the reader
+has named one of those places would catch it without flagging the other two.
+
 **Deadline reminders.** A lease that renews itself unless notice is given sixty days
 before the end already trips the auto-renewal rule. Reading the end date and the notice
 period would let the app put one reminder in the calendar, through the calendar app's own
