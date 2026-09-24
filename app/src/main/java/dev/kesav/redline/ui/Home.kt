@@ -67,6 +67,12 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.border
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.unit.dp
 import dev.kesav.redline.Scanner
 
@@ -151,14 +157,16 @@ private fun Start(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Promise(onChecks = onChecks)
+        // Space between groups is larger than space inside them, so the screen reads as
+        // promise, ways in, what it checks, then the sample, and not as one long list.
+        Promise()
 
         Text(
             text = "Start with your lease",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 12.dp, start = 4.dp).semantics { heading() },
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 24.dp, bottom = 12.dp, start = 4.dp).semantics { heading() },
         )
 
         // The PDF is the common case: a lease is emailed far more often than it is
@@ -171,6 +179,8 @@ private fun Start(
             filled = true,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        Spacer(Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
@@ -196,16 +206,24 @@ private fun Start(
             )
         }
 
+        Spacer(Modifier.height(32.dp))
+
         LooksFor(onChecks)
 
+        Spacer(Modifier.height(12.dp))
+
+        // A document, not a sparkle: the sparkle is the stock glyph for "an AI feature",
+        // and the case this app makes is that nothing here is a model guessing.
         Tile(
-            icon = RedlineIcons.Sparkle,
-            title = "No lease to hand? Try a sample",
+            icon = RedlineIcons.Document,
+            title = "No lease to hand? Open a sample lease",
             detail = null,
             onClick = onSample,
             quiet = true,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        Spacer(Modifier.height(16.dp))
 
         // The price belongs on this screen, not only on the paywall. Reading a lease in
         // is work, and learning the cost only after doing that work is the shape of an
@@ -235,45 +253,54 @@ private fun Start(
 /**
  * What a scan looks for, before anyone hands over a lease.
  *
- * Read from the rule table, like the checks sheet it opens, so this row cannot name a
- * subject the scanner does not actually examine.
+ * Read from the rule table, like the checks sheet it opens, so this card cannot name a
+ * subject the scanner does not actually examine. All nine subjects show at once: the row of
+ * tiles it replaces fitted exactly three on a phone, which read as a complete set, and the
+ * per-subject counts were all three, which carried nothing. The whole card is one target,
+ * so nine labels do not pretend to be nine buttons.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LooksFor(onChecks: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 12.dp)) {
-        Text(
-            "What it looks for",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(start = 4.dp).semantics { heading() },
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 0.dp),
-        ) {
-            items(Scanner.topics) { topic ->
-                Surface(
-                    onClick = onChecks,
-                    shape = MaterialTheme.shapes.medium,
-                    color = scheme.surfaceContainerLowest,
-                ) {
-                    Column(
-                        modifier = Modifier.width(132.dp).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            "${topic.ruleCount}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = scheme.primary,
-                        )
-                        Text(
-                            topic.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+    val spoken = "What it looks for: " + Scanner.topics.joinToString(", ") { it.name.lowercase() } +
+        ". ${Scanner.ruleCount} checks."
+    Surface(
+        onClick = onChecks,
+        shape = MaterialTheme.shapes.large,
+        color = scheme.surfaceContainerLowest,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics {
+                contentDescription = spoken
+                onClick(label = "open the list") { onChecks(); true }
+            },
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("What it looks for", style = MaterialTheme.typography.titleMedium)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                for (topic in Scanner.topics) {
+                    Text(
+                        topic.name,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = scheme.onSurface,
+                        modifier = Modifier
+                            .border(1.dp, scheme.outlineVariant, MaterialTheme.shapes.small)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
                 }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "See all ${Scanner.ruleCount} checks",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = scheme.primary,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(RedlineIcons.Chevron, contentDescription = null, tint = scheme.primary)
             }
         }
     }
@@ -286,8 +313,9 @@ private fun LooksFor(onChecks: () -> Unit) {
  * reason to use this rather than pasting a lease into a chatbot, so it is set as large
  * as the promise itself, on the one dark panel the eye lands on first.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Promise(onChecks: () -> Unit) {
+private fun Promise() {
     val hero = LocalHero.current
     Surface(
         color = hero.container,
@@ -307,21 +335,6 @@ private fun Promise(onChecks: () -> Unit) {
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 10.dp).weight(1f),
                 )
-                Surface(
-                    onClick = onChecks,
-                    shape = MaterialTheme.shapes.small,
-                    color = hero.content.copy(alpha = 0.10f),
-                    contentColor = hero.content,
-                ) {
-                    Row(
-                        modifier = Modifier.heightIn(min = 40.dp).padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(RedlineIcons.Checks, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text("${Scanner.ruleCount} checks", style = MaterialTheme.typography.labelLarge)
-                    }
-                }
             }
 
             RedlinedHeadline(
@@ -339,7 +352,12 @@ private fun Promise(onChecks: () -> Unit) {
                 color = hero.muted,
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Plain lines, not chips: they state facts and do nothing when tapped, and a
+            // filled shape the size of a button promises a tap it cannot keep.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Assurance(RedlineIcons.Shield, "On this phone")
                 Assurance(RedlineIcons.Offline, "Works offline")
             }
@@ -359,6 +377,18 @@ private fun RedlinedHeadline(before: String, marked: String, after: String, colo
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val start = before.length
     val end = start + marked.length
+
+    // The pen stroke draws itself the first time, which is the product showing what it
+    // does in its first second. Saved, so rotating the phone does not replay it.
+    val moving = animationsEnabled()
+    var played by rememberSaveable { mutableStateOf(false) }
+    val drawn = remember { Animatable(if (played || !moving) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!played && moving) {
+            drawn.animateTo(1f, tween(durationMillis = 520, delayMillis = 280, easing = RedlineMotion.Decelerate))
+        }
+        played = true
+    }
     Text(
         text = buildAnnotatedString {
             append(before)
@@ -373,17 +403,24 @@ private fun RedlinedHeadline(before: String, marked: String, after: String, colo
             .drawBehind {
                 val l = layout ?: return@drawBehind
                 val thickness = 4.dp.toPx()
-                for (line in l.getLineForOffset(start)..l.getLineForOffset(end - 1)) {
+                val segments = (l.getLineForOffset(start)..l.getLineForOffset(end - 1)).mapNotNull { line ->
                     val from = maxOf(start, l.getLineStart(line))
                     val to = minOf(end, l.getLineEnd(line, visibleEnd = true))
-                    if (from >= to) continue
+                    if (from >= to) return@mapNotNull null
                     val x1 = l.getHorizontalPosition(from, usePrimaryDirection = true)
                     val x2 = l.getHorizontalPosition(to, usePrimaryDirection = true)
-                    val y = l.getLineBaseline(line) + 5.dp.toPx()
+                    Triple(minOf(x1, x2), kotlin.math.abs(x2 - x1), l.getLineBaseline(line) + 5.dp.toPx())
+                }
+                // Each wrapped line gets its share of the stroke in reading order.
+                var budget = segments.sumOf { it.second.toDouble() }.toFloat() * drawn.value
+                for ((x, width, y) in segments) {
+                    if (budget <= 0f) break
+                    val w = minOf(width, budget)
+                    budget -= w
                     drawRoundRect(
                         color = mark,
-                        topLeft = Offset(minOf(x1, x2), y),
-                        size = Size(kotlin.math.abs(x2 - x1), thickness),
+                        topLeft = Offset(x, y),
+                        size = Size(w, thickness),
                         cornerRadius = CornerRadius(thickness / 2),
                     )
                 }
@@ -395,15 +432,12 @@ private fun RedlinedHeadline(before: String, marked: String, after: String, colo
 private fun Assurance(icon: ImageVector, label: String) {
     val hero = LocalHero.current
     Row(
-        modifier = Modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(hero.content.copy(alpha = 0.08f))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+        modifier = Modifier.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = hero.accent)
-        Text(label, style = MaterialTheme.typography.labelLarge, color = hero.content)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = hero.muted)
     }
 }
 
@@ -429,8 +463,10 @@ private fun Tile(
         else -> scheme.surfaceContainerLowest
     }
     val content = if (filled) scheme.onPrimary else scheme.onSurface
-    val badge = if (filled) scheme.onPrimary.copy(alpha = 0.16f) else scheme.primaryContainer
-    val badgeTint = if (filled) scheme.onPrimary else scheme.primary
+    // Red belongs to the one tile that is the common case. The others were pink badges
+    // with red icons, which made red mean "a tile" instead of "look here".
+    val badge = if (filled) scheme.onPrimary.copy(alpha = 0.16f) else scheme.secondaryContainer
+    val badgeTint = if (filled) scheme.onPrimary else scheme.onSecondaryContainer
 
     Surface(
         onClick = onClick,
