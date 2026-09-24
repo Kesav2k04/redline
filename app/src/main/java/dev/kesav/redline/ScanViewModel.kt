@@ -343,10 +343,25 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
             _ui.update { it.copy(state = scanned).withAccess() }
             // Every lease that reads as one is kept on the phone for comparing later.
             if (scanned.looksLikeLease && text.isNotBlank()) {
-                val title = LeaseStore.titleFor(text, _ui.value.source)
+                // A lease scanned again keeps the name it was first saved under.
+                val title = _ui.value.saved.firstOrNull { it.id == leaseFingerprint(text) }?.title
+                    ?: LeaseStore.titleFor(text, _ui.value.source)
                 val saved = withContext(Dispatchers.IO) { LeaseStore.save(getApplication(), text, title, _ui.value.place) }
                 _ui.update { it.copy(saved = saved) }
             }
+        }
+    }
+
+    /** A lease scanned before on this phone, read again with today's rules. */
+    fun openSaved(lease: SavedLease) {
+        _ui.update { it.copy(text = lease.text, source = null, photoPages = 0, rent = null) }
+        scan()
+    }
+
+    fun forget(id: String) {
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) { LeaseStore.remove(getApplication(), id) }
+            _ui.update { it.copy(saved = saved) }
         }
     }
 
