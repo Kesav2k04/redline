@@ -123,6 +123,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.core.animate
 import kotlin.coroutines.cancellation.CancellationException
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -457,6 +461,10 @@ internal fun Results(
     val locked = !unlocked && state.sellable
     val listState = rememberLazyListState()
     val lifted by remember { derivedStateOf { listState.canScrollForward } }
+    val pastSummary by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    val countIn = motion(tween<Float>(150))
+    val countSlide = motion(tween<IntOffset>(150, easing = RedlineMotion.Decelerate))
+    val countOut = motion(tween<Float>(100))
 
     // A tap on the locked index never starts a payment: an accidental tap mid-scroll must
     // not raise a purchase sheet. It points at the button that does, by feel, by motion
@@ -516,6 +524,30 @@ internal fun Results(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f),
             )
+            // Once the verdict panel scrolls away, its number waits here: every card below
+            // is evidence for it, and a reader deep in the list should not have to scroll
+            // back to remember what it adds up to.
+            AnimatedVisibility(
+                visible = pastSummary && state.looksLikeLease && state.flaggedClauses > 0,
+                enter = fadeIn(countIn) + slideInVertically(countSlide) { it / 3 },
+                exit = fadeOut(countOut),
+            ) {
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)) {
+                            append("${state.flaggedClauses}")
+                        }
+                        append(" of ${state.clauseCount}")
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp)
+                        .clearAndSetSemantics {
+                            contentDescription = "${state.flaggedClauses} of ${state.clauseCount} clauses flagged"
+                        },
+                )
+            }
             if (shareable) {
                 IconButton(onClick = onShare) {
                     Icon(RedlineIcons.Share, contentDescription = "Send the full report")
@@ -526,7 +558,10 @@ internal fun Results(
         Box(Modifier.weight(1f)) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().fadeTopEdge {
+                if (listState.firstVisibleItemIndex > 0) Float.MAX_VALUE
+                else listState.firstVisibleItemScrollOffset.toFloat()
+            },
             // Extra room at the foot so the last card clears the pinned offer bar.
             // Without it the bar sits on top of the final card and crops it, which
             // reads as an unfinished screen rather than as a scroll position.
@@ -677,10 +712,12 @@ internal fun Results(
                 // device: the first painted frame is already red, because the
                 // entitlement read finishes while the reader is still in the editor, so
                 // `known` is the honest disable and `busy` never was.
+                val press = remember { MutableInteractionSource() }
                 Button(
                     onClick = { if (!busy) onUnlock() },
                     enabled = known,
                     shape = MaterialTheme.shapes.medium,
+                    interactionSource = press,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 56.dp)
@@ -688,6 +725,7 @@ internal fun Results(
                             scaleX = nudge.value
                             scaleY = nudge.value
                         }
+                        .pressScale(press)
                         .semantics {
                             if (busy) contentDescription = "Completing your purchase"
                         },
@@ -730,10 +768,12 @@ internal fun Results(
             // Two readers, two messages. The landlord gets the requests and nothing else;
             // a parent or an adviser gets the quoted clauses and the reasons.
             BottomBar(lifted) {
+                val press = remember { MutableInteractionSource() }
                 Button(
                     onClick = onLetter,
                     shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                    interactionSource = press,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).pressScale(press),
                 ) {
                     Icon(RedlineIcons.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(10.dp))
@@ -1206,11 +1246,14 @@ private fun LockedIndex(locked: List<ClauseGroup>, onTap: () -> Unit, modifier: 
     val spoken = "$more. " + topics.joinToString("; ") {
         "${it.name}, " + if (it.clauses == 1) "1 clause" else "${it.clauses} clauses"
     }
+    val press = remember { MutableInteractionSource() }
     Surface(
         onClick = onTap,
         shape = MaterialTheme.shapes.large,
         color = scheme.surfaceContainerLowest,
+        interactionSource = press,
         modifier = modifier
+            .pressScale(press)
             .fillMaxWidth()
             .clearAndSetSemantics {
                 contentDescription = spoken

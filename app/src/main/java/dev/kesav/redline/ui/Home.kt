@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.unit.dp
 import dev.kesav.redline.Scanner
 
@@ -160,10 +161,12 @@ private fun Start(
 
     // Three things this column has to survive: a short phone, a reader at 200% font
     // scale, and a landscape window. It scrolls rather than squeezing, so nothing is cut.
+    val scroll = rememberScrollState()
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .fadeTopEdge { scroll.value.toFloat() }
+            .verticalScroll(scroll)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         // Space between groups is larger than space inside them, so the screen reads as
@@ -476,13 +479,15 @@ private fun Tile(
     val badge = if (filled) scheme.onPrimary.copy(alpha = 0.16f) else scheme.secondaryContainer
     val badgeTint = if (filled) scheme.onPrimary else scheme.onSecondaryContainer
 
+    val press = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
         color = container,
         contentColor = content,
         border = if (quiet) BorderStroke(1.dp, scheme.outlineVariant) else null,
-        modifier = modifier.heightIn(min = 56.dp),
+        interactionSource = press,
+        modifier = modifier.pressScale(press).heightIn(min = 56.dp),
     ) {
         val iconBox = @Composable {
             Box(
@@ -733,6 +738,7 @@ private fun Document(
             // not respond; a tap on an empty field now says what is missing.
             val haptic = LocalHapticFeedback.current
             var empty by remember { mutableStateOf(false) }
+            val press = remember { MutableInteractionSource() }
             Button(
                 onClick = {
                     if (text.isBlank()) {
@@ -743,7 +749,8 @@ private fun Document(
                     }
                 },
                 shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.verdict().fillMaxWidth().heightIn(min = 56.dp),
+                interactionSource = press,
+                modifier = Modifier.verdict().pressScale(press).fillMaxWidth().heightIn(min = 56.dp),
             ) {
                 Text("Scan", style = MaterialTheme.typography.labelLarge)
             }
