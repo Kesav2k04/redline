@@ -318,6 +318,7 @@ fun ScanScreen(
                 onLetter = { letterFor = state },
                 pro = ui.pro,
                 fromPrice = ui.offers.firstOrNull()?.price ?: ui.offer?.product?.price?.formatted,
+                tiers = ui.offers.size > 1,
                 onDocument = { focus -> reading = focus ?: -1 },
                 rent = ui.rent,
                 onRent = viewModel::setRent,
@@ -560,6 +561,8 @@ internal fun Results(
     pitch: String? = null,
     pro: Boolean = unlocked,
     fromPrice: String? = price,
+    // "From" only when there is more than one way to pay.
+    tiers: Boolean = false,
     onDocument: (Int?) -> Unit = {},
     onDraft: () -> Unit = onLetter,
     onCompare: () -> Unit = {},
@@ -888,8 +891,8 @@ internal fun Results(
                         // The entitlement is lifetime. Without saying so, the price read as
                         // the cost of this one lease.
                         text = when {
-                            large -> fromPrice?.let { "From $it, paid once." } ?: "Paid once."
-                            fromPrice != null -> "From $fromPrice, paid once: each clause, what it costs you, and a reply to send."
+                            large -> fromPrice?.let { "${if (tiers) "From " else ""}$it, paid once." } ?: "Paid once."
+                            fromPrice != null -> "${if (tiers) "From " else ""}$fromPrice, paid once: each clause, what it costs you, and a reply to send."
                             else -> "Paid once: each clause, what it costs you, and a reply to send."
                         },
                         style = MaterialTheme.typography.bodySmall,
