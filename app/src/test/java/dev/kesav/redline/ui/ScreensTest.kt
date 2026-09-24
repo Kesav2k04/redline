@@ -24,6 +24,7 @@ import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.kesav.redline.ClauseSplitter
 import dev.kesav.redline.Place
+import dev.kesav.redline.PriceLead
 import dev.kesav.redline.ScanState
 import dev.kesav.redline.Scanner
 import java.io.File
@@ -70,7 +71,7 @@ class ScreensTest {
 
     @Composable
     private fun Start() = Editor(
-        text = "", price = "$4.99", onText = {}, onScan = {}, onSample = {}, onChecks = {},
+        text = "", price = PriceLead("$4.99", from = false, once = true, per = null), onText = {}, onScan = {}, onSample = {}, onChecks = {},
         reading = null, source = null, photoPages = 0, onOpen = {}, onPhoto = {},
     )
 
@@ -107,7 +108,7 @@ class ScreensTest {
         )
         screen {
             Editor(
-                text = "", price = "$4.99", onText = {}, onScan = {}, onSample = {}, onChecks = {},
+                text = "", price = PriceLead("$4.99", from = false, once = true, per = null), onText = {}, onScan = {}, onSample = {}, onChecks = {},
                 reading = "Reading page 3 of 5", source = null, photoPages = 0, onOpen = {}, onPhoto = {},
                 readingProgress = 0.4f,
             )

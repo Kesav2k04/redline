@@ -182,18 +182,30 @@ internal fun PaywallSheet(
                             },
                         )
                     }
-                    proOffers.forEach { offer ->
+                    proOffers.forEachIndexed { i, offer ->
+                        // Two cards both called "Renter Pro" with the same line under them read as
+                        // one plan listed twice, so each says how it is paid and who it suits.
+                        val several = proOffers.size > 1
                         PlanCard(
                             offer = offer,
-                            title = "Renter Pro",
-                            detail = "Every lease you scan, plus comparing two side by side. For flat hunting.",
+                            title = when {
+                                !several -> "Renter Pro"
+                                offer.plan == Plan.PRO_LIFETIME -> "Renter Pro for good"
+                                offer.plan == Plan.PRO_ANNUAL -> "Pro by the year"
+                                else -> "Pro by the month"
+                            },
+                            detail = when {
+                                !several || i == 0 -> "Every lease you scan, plus comparing two side by side. For flat hunting."
+                                offer.plan == Plan.PRO_MONTHLY -> "The same while you are looking. Cancel once you have signed."
+                                else -> "The same, renewed each year."
+                            },
                             terms = when (offer.plan) {
                                 Plan.PRO_LIFETIME -> "Pay once, keep it"
-                                Plan.PRO_ANNUAL -> offer.trial?.let { "$it, then yearly" } ?: "Yearly, cancel any time"
-                                Plan.PRO_MONTHLY -> offer.trial?.let { "$it, then monthly" } ?: "Monthly, cancel any time"
+                                Plan.PRO_ANNUAL -> offer.trial?.let { "$it, then yearly" } ?: if (several) "Cancel any time" else "Yearly, cancel any time"
+                                Plan.PRO_MONTHLY -> offer.trial?.let { "$it, then monthly" } ?: if (several) "Cancel any time" else "Monthly, cancel any time"
                                 Plan.PASS -> ""
                             },
-                            badge = if (passOffer != null) "Best value" else null,
+                            badge = if (passOffer != null && i == 0) "Best value" else null,
                             selected = chosen == offer.plan,
                             onSelect = {
                                 haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)

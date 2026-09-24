@@ -144,7 +144,9 @@ import dev.kesav.redline.Scanner
 import dev.kesav.redline.Finding
 import dev.kesav.redline.Report
 import dev.kesav.redline.R
+import dev.kesav.redline.PriceLead
 import dev.kesav.redline.ScanState
+import dev.kesav.redline.priceLead
 import dev.kesav.redline.ScanViewModel
 import dev.kesav.redline.Severity
 import dev.kesav.redline.ui.camera.CameraScan
@@ -291,7 +293,7 @@ fun ScanScreen(
         when (val state = shown) {
             ScanState.Editing -> Editor(
                 text = ui.text,
-                price = ui.offers.firstOrNull()?.price ?: ui.offer?.product?.price?.formatted,
+                price = priceLead(ui.offers) ?: ui.offer?.product?.price?.formatted?.let { PriceLead(it, from = false, once = true, per = null) },
                 onText = viewModel::edit,
                 onScan = viewModel::scan,
                 onSample = viewModel::loadSample,
@@ -320,8 +322,7 @@ fun ScanScreen(
                 onShare = { scope.launch { context.startActivity(shareReport(context, state)) } },
                 onLetter = { letterFor = state },
                 pro = ui.pro,
-                fromPrice = ui.offers.firstOrNull()?.price ?: ui.offer?.product?.price?.formatted,
-                tiers = ui.offers.size > 1,
+                lead = priceLead(ui.offers)?.text ?: ui.offer?.product?.price?.formatted?.let { "$it, paid once" },
                 onDocument = { focus -> reading = focus ?: -1 },
                 rent = ui.rent,
                 onRent = viewModel::setRent,
@@ -395,6 +396,8 @@ fun ScanScreen(
                 focus = open.takeIf { it >= 0 },
                 locked = locked,
                 onBack = { reading = null },
+                // The paywall opens over the lease, so buying lands the reader back on it.
+                onUnlock = { paywall = PaywallReason.REPORT },
             )
         }
     }
@@ -563,9 +566,7 @@ internal fun Results(
     onPlace: () -> Unit = {},
     pitch: String? = null,
     pro: Boolean = unlocked,
-    fromPrice: String? = price,
-    // "From" only when there is more than one way to pay.
-    tiers: Boolean = false,
+    lead: String? = price?.let { "$it, paid once" },
     onDocument: (Int?) -> Unit = {},
     onDraft: () -> Unit = onLetter,
     onCompare: () -> Unit = {},
@@ -875,8 +876,11 @@ internal fun Results(
             label = "bottomBar",
         ) { offer ->
         if (offer) {
+            // A phone on its side is about 400dp tall, and the bar's three rows took 40% of it.
+            // There the note goes and Restore sits beside the button.
+            val short = LocalConfiguration.current.screenHeightDp < 480
             BottomBar(lifted) {
-                Row(
+                if (!short) Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -894,8 +898,8 @@ internal fun Results(
                         // The entitlement is lifetime. Without saying so, the price read as
                         // the cost of this one lease.
                         text = when {
-                            large -> fromPrice?.let { "${if (tiers) "From " else ""}$it, paid once." } ?: "Paid once."
-                            fromPrice != null -> "${if (tiers) "From " else ""}$fromPrice, paid once: each clause, what it costs you, and a reply to send."
+                            large -> lead?.let { "$it." } ?: "Paid once."
+                            lead != null -> "$lead: each clause, what it costs you, and a reply to send."
                             else -> "Paid once: each clause, what it costs you, and a reply to send."
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -912,13 +916,13 @@ internal fun Results(
                 // entitlement read finishes while the reader is still in the editor, so
                 // `known` is the honest disable and `busy` never was.
                 val press = remember { MutableInteractionSource() }
+                val unlock = @Composable { width: Modifier ->
                 Button(
                     onClick = { if (!busy) onUnlock() },
                     enabled = known,
                     shape = MaterialTheme.shapes.medium,
                     interactionSource = press,
-                    modifier = Modifier
-                        .fillMaxWidth()
+                    modifier = width
                         .heightIn(min = 56.dp)
                         .graphicsLayer {
                             scaleX = nudge.value
@@ -945,6 +949,8 @@ internal fun Results(
                         Text(unlockLabel(state.groups.size - 1, null), style = MaterialTheme.typography.labelLarge)
                     }
                 }
+                }
+                val restore = @Composable {
                 TextButton(
                     onClick = onRestore,
                     enabled = known && !busy,
@@ -956,7 +962,17 @@ internal fun Results(
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                 ) {
-                    Text("Already bought it? Restore")
+                    Text(if (short) "Restore" else "Already bought it? Restore")
+                }
+                }
+                if (short) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        unlock(Modifier.weight(1f))
+                        restore()
+                    }
+                } else {
+                    unlock(Modifier.fillMaxWidth())
+                    restore()
                 }
             }
         } else if (shareable) {

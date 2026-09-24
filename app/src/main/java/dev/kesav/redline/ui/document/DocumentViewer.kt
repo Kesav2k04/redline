@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -41,6 +42,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.ZeroCornerSize
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -121,6 +124,7 @@ internal fun DocumentViewer(
     focus: Int?,
     locked: Set<Int>,
     onBack: () -> Unit,
+    onUnlock: (() -> Unit)? = null,
 ) {
     BackHandler(onBack = onBack)
     val scheme = MaterialTheme.colorScheme
@@ -180,6 +184,7 @@ internal fun DocumentViewer(
                             haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
                             open = if (clause.index in open) open - clause.index else open + clause.index
                         },
+                        onUnlock = onUnlock,
                     )
                 }
                 item(key = "foot") { SheetFoot() }
@@ -289,6 +294,7 @@ private fun ClauseBlock(
     onDrawn: () -> Unit,
     pulse: Float,
     onToggle: () -> Unit,
+    onUnlock: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val colors = risk
@@ -375,7 +381,7 @@ private fun ClauseBlock(
                 enter = expandVertically(motion(RedlineMotion.expand())) + fadeIn(motion(tween(160, delayMillis = 60))),
                 exit = shrinkVertically(motion(RedlineMotion.expand())) + fadeOut(motion(tween(100))),
             ) {
-                FindingCard(group, locked, Modifier.padding(start = MARGIN, top = Space.m, bottom = Space.s))
+                FindingCard(group, locked, Modifier.padding(start = MARGIN, top = Space.m, bottom = Space.s), onUnlock)
             }
         }
     }
@@ -432,7 +438,7 @@ private fun DrawScope.marker(
 /** The finding under its clause: what it says and what to ask for, or only the topic when locked. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FindingCard(group: ClauseGroup, locked: Boolean, modifier: Modifier = Modifier) {
+private fun FindingCard(group: ClauseGroup, locked: Boolean, modifier: Modifier = Modifier, onUnlock: (() -> Unit)? = null) {
     val colors = risk
     val scheme = MaterialTheme.colorScheme
     val tint = colors.of(group.worst)
@@ -478,6 +484,19 @@ private fun FindingCard(group: ClauseGroup, locked: Boolean, modifier: Modifier 
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
+            }
+            // The reader is looking at the clause and wondering what is wrong with it, which
+            // is the one moment the report is worth the most, so the way to it is here.
+            if (onUnlock != null) {
+                Spacer(Modifier.height(Space.m))
+                FilledTonalButton(
+                    onClick = onUnlock,
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = scheme.surface, contentColor = tint),
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Text(if (group.findings.size == 1) "Read what it says" else "Read what they say", style = MaterialTheme.typography.labelLarge)
+                }
             }
         } else {
             for ((i, f) in group.findings.withIndex()) {

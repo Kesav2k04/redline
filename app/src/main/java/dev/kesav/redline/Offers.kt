@@ -57,6 +57,32 @@ internal fun offersFrom(offering: Offering?): List<Offer> {
         }
 }
 
+/**
+ * The price as the lines outside the paywall state it. "From" only when there is more than one
+ * way to pay, and "paid once" only when every way is one payment: a monthly plan beside a
+ * lifetime one made "From $9.99, paid once" untrue.
+ */
+internal data class PriceLead(val price: String, val from: Boolean, val once: Boolean, val per: String?) {
+    val text: String get() = buildString {
+        if (from) append("From ")
+        append(price)
+        per?.let { append(" a $it") }
+        if (once) append(", paid once")
+    }
+}
+
+internal fun priceLead(offers: List<Offer>): PriceLead? {
+    val cheapest = offers.minByOrNull { it.pkg.product.price.amountMicros } ?: return null
+    val once = offers.all { it.plan == Plan.PASS || it.plan == Plan.PRO_LIFETIME }
+    val per = when {
+        offers.size > 1 -> null
+        cheapest.plan == Plan.PRO_ANNUAL -> "year"
+        cheapest.plan == Plan.PRO_MONTHLY -> "month"
+        else -> null
+    }
+    return PriceLead(cheapest.price, from = offers.size > 1, once = once, per = per)
+}
+
 internal fun trialText(period: Period): String {
     val n = period.value
     val unit = when (period.unit) {
