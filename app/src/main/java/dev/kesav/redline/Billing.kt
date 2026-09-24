@@ -12,6 +12,7 @@ import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchaseParams
 import com.revenuecat.purchases.PurchasesConfiguration
 import com.revenuecat.purchases.awaitCustomerInfo
+import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
 import com.revenuecat.purchases.awaitOfferings
 import com.revenuecat.purchases.awaitPurchase
 import com.revenuecat.purchases.awaitRestore
@@ -75,6 +76,9 @@ object Billing {
             .build()
 
         Purchases.configure(config)
+        // Entitlement changes the app did not ask for, a restore finishing late or a
+        // refund, arrive here instead of waiting for the next launch.
+        Purchases.sharedInstance.updatedCustomerInfoListener = UpdatedCustomerInfoListener(::apply)
         configured = true
     }
 

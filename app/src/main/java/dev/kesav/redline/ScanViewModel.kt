@@ -179,7 +179,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         viewModelScope.launch {
             Billing.offering.collect { offering ->
                 val packages = offering?.availablePackages.orEmpty()
-                val offer = chooseOffer(packages.map { it.packageType })?.let(packages::getOrNull)
+                val offer = offerFrom(offering)
 
                 // A package built from a custom identifier reports CUSTOM whatever it
                 // sells, so a mis-set dashboard shows up here as a button with no price
@@ -326,15 +326,41 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
     }
 
     fun buy(activity: Activity) {
-        val pkg = _ui.value.offer ?: run {
-            _ui.update { it.copy(message = "No offering is available right now.") }
-            return
-        }
         viewModelScope.launch {
             _ui.update { it.copy(busy = true, message = null) }
+            // The app says it works offline, and it does, which means it can start with
+            // no offering at all. The offering was only ever fetched at launch, so a
+            // reader who scanned on the metro and then got signal was told no offering
+            // existed. Ask again at the moment it matters.
+            val pkg = _ui.value.offer ?: run {
+                Billing.loadOffering()
+                offerFrom(Billing.offering.value)
+            }
+            if (pkg == null) {
+                _ui.update {
+                    it.copy(busy = false, message = "The store could not be reached. Check the connection and try again.")
+                }
+                return@launch
+            }
             val error = Billing.purchase(activity, pkg)
             _ui.update { it.copy(busy = false, message = error) }
         }
+    }
+
+    /**
+     * Fetches the offering again when the paywall is on screen without one, so the price
+     * appears on the button once the phone is back online rather than never.
+     */
+    fun retryOffer() {
+        if (_ui.value.offer != null || offerRetry?.isActive == true) return
+        offerRetry = viewModelScope.launch { Billing.loadOffering() }
+    }
+
+    private var offerRetry: kotlinx.coroutines.Job? = null
+
+    private fun offerFrom(offering: com.revenuecat.purchases.Offering?): Package? {
+        val packages = offering?.availablePackages.orEmpty()
+        return chooseOffer(packages.map { it.packageType })?.let(packages::getOrNull)
     }
 
     fun restore() {

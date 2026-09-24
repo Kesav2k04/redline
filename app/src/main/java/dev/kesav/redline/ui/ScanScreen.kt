@@ -166,6 +166,17 @@ fun ScanScreen(
     var letterFor by remember { mutableStateOf<ScanState.Scanned?>(null) }
     var choosingPlace by remember { mutableStateOf(false) }
 
+    // A paywall with no price is an app that started offline. Keep asking, quietly, while
+    // it is on screen, so the price turns up when the signal does.
+    val priceMissing = ui.offer == null && !ui.unlocked &&
+        (ui.state as? ScanState.Scanned)?.sellable == true
+    LaunchedEffect(priceMissing) {
+        while (priceMissing) {
+            viewModel.retryOffer()
+            delay(15_000)
+        }
+    }
+
     // Without this, a back swipe on the results screen finishes the activity and closes
     // the app. The reader's own lease is still in the text field behind it, so the app
     // shutting down looks like it crashed rather than like it navigated.
@@ -520,8 +531,9 @@ internal fun Results(
             val more = (state.groups.size - 1).coerceAtLeast(0)
             hint = if (more == 1) "Report open. 1 more clause." else "Report open. $more more clauses."
             delay(120)
-            // The summary, the free card and the place row sit above the first new card.
-            val firstNew = 3
+            // The summary and the free card sit above the first new card; the place row
+            // moves to the foot as the report opens.
+            val firstNew = 2
             if (moving) {
                 listState.animateScrollToItem(firstNew, -with(density) { 96.dp.roundToPx() })
             }
@@ -603,8 +615,8 @@ internal fun Results(
         ) {
             item { Summary(state, locked = !unlocked && state.sellable, onShareCount = onShareCount) }
 
-            // Under the first card, where its ask has just said "the local legal limit" and
-            // the reader wants the number. Above it, the row pushed the free card down.
+            // While locked, under the free card, where its ask has just said "the local legal
+            // limit" and the reader wants the number. Above it, the row pushed that card down.
             val showPlace = state.looksLikeLease && state.findings.isNotEmpty()
             val placeItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
                 item(key = "place") { PlaceRow(place, onClick = onPlace, modifier = Modifier.animateItem()) }
@@ -653,8 +665,10 @@ internal fun Results(
                             drawMark = revealing,
                         )
                     }
-                    if (i == 0 && showPlace) placeItem()
                 }
+                // Once every clause is open the row would split the report between its first
+                // two cards, so it waits at the foot, where the asks above already carry it.
+                if (showPlace) placeItem()
             }
 
             // At the foot rather than in the pinned bar. Someone who has scrolled past
