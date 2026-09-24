@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The system splash, from platform attributes alone. Without an icon background the
+         light page mark sat on the light page and nearly vanished; on ink it reads as the
+         launcher icon does, and the stroke draws itself in. -->
+    <style name="Theme.Redline" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/page</item>
+        <item name="android:windowSplashScreenBackground">@color/page</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_redline</item>
+        <item name="android:windowSplashScreenAnimationDuration">500</item>
+    </style>
+</resources>
