@@ -16,8 +16,9 @@ archetypes could not be shaped around the answers. Git history shows the order.
 
 Two conditions were fixed before the first run:
 
-1. Top-1 category correct on at least **14 of the 20** costly clauses. Chance is about
-   0.83%, so 14 cannot happen by luck.
+1. Top-1 category correct on at least **14 of the 20** costly clauses. Chance is 10% per
+   clause, since there are ten categories, so 14 or more of 20 by luck has a probability
+   of about 2 in 10 billion.
 2. Median true-positive margin at least **3x** the 90th-percentile benign margin.
 
 Margin means the gap between the winning archetype and the best archetype from a
@@ -50,9 +51,9 @@ so the ratio got worse, not better.
 - **repairs** behaved as a sink, absorbing early termination, rent increase, society
   charges and restoration clauses. A nearest-neighbour bank develops attractors.
 - `b07` is a plain, harmless sentence about paying rent by bank transfer. Centered, it
-  scored a margin of 0.1610, higher than fourteen of the twenty genuinely costly clauses.
-  `b08`, about paying your own electricity bill, scored 0.1759, the second highest margin
-  in the whole set.
+  scored a margin of 0.1610, higher than fifteen of the twenty genuinely costly clauses.
+  `b08`, about paying your own electricity bill, scored 0.1759, the highest benign margin
+  in the set and higher than sixteen costly clauses.
 
 That last pair is the important one. The failure is not that costly clauses get missed.
 It is that harmless ones get flagged **confidently**, and a user reading a confident
@@ -165,7 +166,8 @@ Where each row came from is in its `origin` and `source` columns:
 
 ### A whole US lease
 
-`us-lease.txt` is a sixteen-clause lease written after the rules, in the wording US leases
+`us-lease.txt` is a lease of fourteen numbered clauses (sixteen blocks as the splitter
+counts them, with the title and the opening paragraph), written after the rules, in the wording US leases
 use rather than the wording of this set. Nine of its clauses cost the tenant something. On
 the first run the rules found six of those nine for the right reason. They read the renewal
 clause ("renews automatically for a further twelve months unless the Tenant gives written
@@ -237,7 +239,7 @@ eleven-month term became a notice period.
 Every trigger now starts on a word boundary, and every rule that reads a number takes the
 one nearest a required anchor word, within a reach set per rule. A late fee has to sit
 within forty characters of *charge*, *fee*, *penalty* or *interest*; a notice period
-within forty of *notice*. [`AdversarialTest`](../app/src/test/java/dev/kesav/redline/AdversarialTest.kt)
+within twenty-four of *notice*. [`AdversarialTest`](../app/src/test/java/dev/kesav/redline/AdversarialTest.kt)
 holds the clauses built to break it, including one with two percentages where the late
 fee must come out as 4 and not 10, beside six plain clauses that must still fire. The
 frozen corpus scores the same 20 of 20 and 10 of 10 afterwards, which says less about

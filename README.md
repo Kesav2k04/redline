@@ -6,8 +6,10 @@ Built by a student for the Next Gen Award at RevenueCat Shipaton 2026.
 
 Everything that touches the lease runs on the device. No account and no upload. Open the
 PDF your landlord sent, photograph a paper copy, or paste the text: reading, OCR and the
-scan all happen on the phone. The only network traffic is RevenueCat's, to show the price
-and take the payment, and it never carries a word of the lease.
+scan all happen on the phone, and the lease never goes over the network. The app talks to
+RevenueCat to show the price and take the payment, and Google's ML Kit text recognition
+sends Google its usage diagnostics, which Google's disclosure lists as device, app and
+performance details, not the text it reads.
 
 <p>
   <img src="docs/start.png" alt="Start screen. The promise, then three ways in: open a PDF, photograph the pages, or paste the text, with a sample lease to try." width="31%">
@@ -57,7 +59,9 @@ the change to ask for on each, and a letter to the landlord that asks for all of
   otherwise slide a subscription into that slot and quietly offer a recurring charge to
   somebody reading one lease. `chooseOffer` picks `LIFETIME` by type and has no fallback,
   because selling the wrong thing is worse than selling nothing.
-- `Billing.restore()` implements restore on reinstall, and it actually works after one.
+- Restore on reinstall needs no tap. `Billing.start()` gives RevenueCat an app user id
+  derived from `ANDROID_ID`, so the first `Billing.refresh()` after a reinstall finds the
+  purchase, and `Billing.restore()` backs the Restore button for anything that path misses.
   There are no accounts here, so the purchase is keyed to a SHA-256 hash of `ANDROID_ID`,
   which is scoped to the signing key and outlives the app's own storage. Automatic device
   identifier collection is off, and what reaches RevenueCat is a salted hash, never the raw
@@ -107,11 +111,11 @@ Three things are given away on purpose, and each one costs a sale in the short r
   two ever drift. A paywall in front of an unexplained judgement is the thing a reader
   is right to distrust.
 - **The price, before the work.** It is on the first screen, read from the offering,
-  next to the line saying the text never leaves the phone. Learning the cost only after
+  in the line under the sample lease that says the scan and its count are free. Learning the cost only after
   reading a lease into the field is the shape of an ambush even when the number is small.
 
 What is left to sell is the part that took the work: which clause, what it says, and why
-it costs money. One payment, no subscription, because a tenant signs a lease roughly
+it costs money. One payment, no subscription, because a tenant signs a lease about
 once a year and billing them monthly for that would be the actual dark pattern.
 
 ## Why it works the way it does
@@ -129,11 +133,11 @@ fourteen of twenty, and a true-positive margin at least three times the benign m
 | | Embeddings (Universal Sentence Encoder) | Rules |
 |---|---|---|
 | Costly clauses identified | **8 / 20** | **20 / 20** |
-| Benign clauses left alone | 3 confident false flags | **10 / 10** |
+| Benign clauses left alone | 2 of 10 scored above the median correct match | **10 / 10** |
 
 The interesting part is not that it scored badly. It is *how*. A benign sentence about
-paying your own electricity bill produced the second-highest confidence score in the
-entire set, higher than fourteen genuinely costly clauses. The failure mode was not
+paying your own electricity bill scored higher than sixteen of the twenty genuinely
+costly clauses, and higher than any other harmless one. The failure mode was not
 missing bad clauses; it was confidently flagging harmless ones, which is worse than
 saying nothing when the reader is trying to decide whether to sign.
 
@@ -226,8 +230,8 @@ A lease usually arrives as a PDF or on paper, so those come first.
   deleted as soon as reading finishes.
 - **Photograph it**, a page at a time. The camera app hands the picture back through a
   `FileProvider`, so Redline asks for no camera permission.
-- **Open with Redline** or **share to Redline** from Gmail, WhatsApp or Files, for a PDF,
-  an image or plain text (`ACTION_VIEW`, `ACTION_SEND`).
+- **Open with Redline** on a PDF (`ACTION_VIEW`), or **share to Redline** from Gmail,
+  WhatsApp or Files, for a PDF, an image or plain text (`ACTION_SEND`).
 - Paste it, or select text anywhere in Android and pick Redline (`ACTION_PROCESS_TEXT`).
 - Or tap "Try it on a sample lease".
 
@@ -264,8 +268,11 @@ Every figure was read in the statute or on an official page, cited beside it in
 [`Places.kt`](app/src/main/java/dev/kesav/redline/Places.kt). What could only be
 confirmed second-hand was left out rather than guessed: England's entry notice, and the
 late-fee percentages Californian and Massachusetts courts tend to accept. Anywhere else,
-the general wording stays. `PlacesTest` pins each moved threshold with a clause on either
-side of it.
+the general wording stays. `PlacesTest` pins the moved thresholds with one clause each: a
+two-month deposit (flagged in California, New York, Massachusetts and England, not in
+Texas, India or with no place chosen), a deposit returned in twenty days (late in New
+York, not in California or with no place), and a five percent late fee (flagged by
+default, not in Texas).
 
 After purchase, **Ask the landlord for these changes** opens the letter before it goes:
 one line per flagged clause with a tick box (serious ones start ticked), and underneath,
@@ -292,8 +299,8 @@ their quantities: "ten percent", "ninety days", "two thousand rupees". A rule ca
 compare anything until those are integers.
 
 One bug worth naming, because the test that pins it is more interesting than the fix. On
-*"six months notice, failing which three months rent is payable and adjusted against the
-deposit"*, the deposit rule read the first months figure it found and announced a
+*"six months notice in writing, failing which three months rent shall be payable as
+liquidated damages and shall be adjusted against the deposit"*, the deposit rule read the first months figure it found and announced a
 six-month deposit that did not exist. Quantities now have to sit beside the thing they
 describe.
 
@@ -302,13 +309,15 @@ describe.
 Not a checklist item here, because the people most likely to be handed a bad lease are
 not always the people best served by an app.
 
-- Every finding card is one merged announcement rather than five fragments, and it
+- Every finding card is one merged announcement rather than a string of fragments, and it
   includes the clause text itself. Reading out "costly risk, deposit equal to ten months
   rent" and then withholding the sentence would hand a screen reader user the headline
   and keep the evidence.
-- A locked finding announces that it is locked and why, so the severity and the count
-  are available without paying, exactly as they are on screen.
-- Severity carries a word, "Serious" or "Worth checking", not only a colour.
+- The locked list is one spoken sentence: each subject, how many clauses sit under it,
+  and whether they are serious, so the count and the severity reach a screen reader
+  before paying, as they reach the eye.
+- On every open card severity carries a word, "Serious" or "Worth checking", not only a
+  colour.
 - Touch targets are at least 48dp. The editor scrolls and lifts above the keyboard, so
   the Scan button is reachable at 200% font scale.
 - The reveal animation reads `ANIMATOR_DURATION_SCALE` and does nothing when animations
