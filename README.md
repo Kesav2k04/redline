@@ -166,11 +166,17 @@ Each finding names the figure it found. "Deposit equal to ten months rent", not
 |---|---|---|
 | Frozen corpus, 30 clauses | 20 / 20 | 10 / 10 |
 | Held out, 10 clauses written after the rules | 4 / 5 | 5 / 5 |
+| A whole US lease, 16 clauses, first run | 6 / 9 | 7 / 7 |
 
 The held-out set uses deliberately different language (lessor and lessee, "demised
 premises", "surcharge") and none of it was available while the rules were written. The
 one miss is documented rather than patched, because editing a rule so a held-out clause
 passes turns it into a training clause.
+
+The US lease was written after the rules, in the wording US leases use. On its first
+run it also read a renewal term as a notice period. Those misses were then fixed, so
+it is a regression check now, and the account is in
+[`eval/README.md`](eval/README.md#a-whole-us-lease).
 
 This is why the app says **"no rule matched"** and never "this lease is clean". Rules
 catch what they were written to catch, and when they miss they say nothing.
