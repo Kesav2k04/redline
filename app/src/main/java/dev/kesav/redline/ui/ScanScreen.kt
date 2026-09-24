@@ -757,10 +757,17 @@ internal fun Results(
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    // At the largest font sizes three lines of this bar covered the free
+                    // card entirely on arrival, so the line keeps only what the button
+                    // cannot say: that the price is paid once and covers every lease.
+                    val large = LocalDensity.current.fontScale > 1.3f
                     Text(
                         // The entitlement is lifetime. Without saying so, the price read as
                         // the cost of this one lease.
-                        text = pitch ?: "Pay once, for every lease you scan: each clause, what to ask for, and a letter to your landlord.",
+                        text = when {
+                            large -> "Pay once, for every lease."
+                            else -> pitch ?: "Pay once, for every lease you scan: each clause, what to ask for, and a letter to your landlord."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
