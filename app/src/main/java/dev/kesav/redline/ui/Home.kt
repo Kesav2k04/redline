@@ -79,6 +79,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import dev.kesav.redline.PriceLead
 import dev.kesav.redline.SavedLease
 import dev.kesav.redline.Scanner
 import kotlin.math.roundToInt
@@ -96,7 +97,7 @@ import kotlin.math.roundToInt
 @Composable
 internal fun Editor(
     text: String,
-    price: String?,
+    price: PriceLead?,
     onText: (String) -> Unit,
     onScan: () -> Unit,
     onSample: () -> Unit,
@@ -161,7 +162,7 @@ private const val LARGE_TEXT = 1.3f
 
 @Composable
 private fun Start(
-    price: String?,
+    price: PriceLead?,
     onOpen: () -> Unit,
     onPhoto: (() -> Unit)?,
     onPaste: (String?) -> Unit,
@@ -425,7 +426,7 @@ private fun Sample(onSample: () -> Unit) {
  * number the app states.
  */
 @Composable
-private fun PriceLine(price: String?) {
+private fun PriceLine(price: PriceLead?) {
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Space.xs, vertical = Space.s),
@@ -439,13 +440,14 @@ private fun PriceLine(price: String?) {
         )
         Text(
             text = buildAnnotatedString {
-                append("The scan, the score and the count are free. The full report starts at ")
+                append("The scan, the score and the count are free. The full report is ")
                 if (price != null) {
-                    append("a one-time ")
-                    withStyle(FigureStyle.toSpanStyle().copy(color = scheme.onSurface)) { append(price) }
-                    append(".")
+                    if (price.from) append("from ")
+                    withStyle(FigureStyle.toSpanStyle().copy(color = scheme.onSurface)) { append(price.price) }
+                    price.per?.let { append(" a $it") }
+                    append(if (price.once) ", paid once." else ".")
                 } else {
-                    append("a one-time payment.")
+                    append("paid once.")
                 }
             },
             style = MaterialTheme.typography.bodyMedium,

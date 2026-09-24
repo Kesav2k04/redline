@@ -84,6 +84,8 @@ object LeaseStore {
             ?.takeIf { it.isNotBlank() && !it.startsWith("the ") && !it.contains("photographed") }
             ?.let { return it.removeSuffix(".pdf").removeSuffix(".PDF").take(40) }
         val first = text.lineSequence().map { it.trim() }.firstOrNull { it.length in 4..60 }
+            // A title set in capitals reads as shouting in a list, so it is set in sentence case.
+            ?.let { line -> if (line.any { it.isLetter() } && line == line.uppercase()) line.lowercase().replaceFirstChar { it.uppercase() } else line }
         return first?.take(40) ?: "Lease"
     }
 }
