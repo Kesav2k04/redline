@@ -146,6 +146,9 @@ the set appear under more than one state with opposite labels: a 5 percent late 
 2,000 dollars of rent breaks New York's 50 dollar cap and is ordinary in Texas, and a two
 month deposit breaks California's one month cap and is lawful in Florida. At least 6 of
 the 94 rows are wrong for any rule that cannot see which jurisdiction the lease is in.
+The app answers that by asking: once the reader says where the home is, the deposit,
+late fee and deposit return limits follow that place's statute (`PlacesTest`). The
+counts above are taken with no place chosen, as a first scan would be.
 
 Where each row came from is in its `origin` and `source` columns:
 
