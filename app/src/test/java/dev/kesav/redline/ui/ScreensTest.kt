@@ -23,6 +23,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.kesav.redline.ClauseSplitter
+import dev.kesav.redline.Place
 import dev.kesav.redline.ScanState
 import dev.kesav.redline.Scanner
 import java.io.File
@@ -118,7 +119,7 @@ class ScreensTest {
     fun reportLocked() {
         screen { Report(unlocked = false) }
         shot("report-locked")
-        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToIndex(2)
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToIndex(3)
         shot("report-locked-index")
     }
 
@@ -161,6 +162,23 @@ class ScreensTest {
     fun reportLandscape() {
         screen { Report(unlocked = true) }
         shot("report-open-land")
+    }
+
+    // The same report once the reader says the home is in Massachusetts: the free card's
+    // ask and reason carry the state's own rule, and the row under it says whose.
+    @Test
+    fun reportPlace() {
+        val clauses = ClauseSplitter.split(File("src/main/assets/sample_lease.txt").readText())
+        val state = ScanState.Scanned(clauses.size, Scanner.ranked(clauses, Place.MASSACHUSETTS))
+        screen {
+            Results(
+                state = state, unlocked = false, known = true, busy = false, price = "$4.99",
+                onUnlock = {}, onRestore = {}, onBack = {}, onShare = {}, onLetter = {},
+                onShareCount = {}, onChecks = {}, place = Place.MASSACHUSETTS,
+            )
+        }
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToIndex(1)
+        shot("report-place")
     }
 
     // The letter sheet's content, drawn in place: a ModalBottomSheet opens a window of its

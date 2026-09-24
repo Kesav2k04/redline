@@ -64,6 +64,11 @@ private class Pattern(
      */
     val ask: String,
 ) {
+    /** The same rule with a different floor, for a place whose cap sits below the default. */
+    fun withAtLeast(floor: Int) = Pattern(
+        id, topic, severity, all, none, unit, floor, below, near, reach, headline, reason, ask,
+    )
+
     fun check(clause: Clause): Finding? {
         val text = clause.text.lowercase()
         if (all.any { !it.containsMatchIn(text) }) return null
@@ -159,8 +164,9 @@ private val patterns = listOf(
         ask = "a returned-payment fee no higher than what the bank actually charges",
     ),
     // The caps named in the reason, each read at its source on 24 Sep 2026:
-    // India, Model Tenancy Act 2021, two months for residential premises (a model law the
-    //   states adopt): https://prsindia.org/billtrack/the-model-tenancy-act-2021
+    // India, Model Tenancy Act 2021, two months for residential premises. A model law the
+    //   states may adopt; Maharashtra, Karnataka and Delhi have not, and Tamil Nadu's own Act
+    //   sets three months: https://prsindia.org/billtrack/the-model-tenancy-act-2021
     // England, up to five weeks' rent where the year's rent is under 50,000 pounds:
     //   https://www.gov.uk/private-renting/deposits
     // California, one month since 1 July 2024 (AB 12):
@@ -171,9 +177,9 @@ private val patterns = listOf(
         all = listOf(Regex("\\b(?:deposit)")),
         unit = MONTHS, atLeast = 4, near = Regex("\\bdeposit"),
         headline = { "Deposit equal to $it months rent" },
-        reason = "India's Model Tenancy Act sets two months for a home, England caps most " +
-            "deposits at five weeks' rent, and California and New York at one month. This " +
-            "is money you cannot touch for the whole term.",
+        reason = "India's Model Tenancy Act proposes two months for a home, England caps most " +
+            "deposits at five weeks' rent, and New York, Massachusetts and, for most landlords, " +
+            "California at one month. This is money you cannot touch for the whole term.",
         ask = "a deposit no larger than the local legal cap",
     ),
     Pattern(
@@ -504,13 +510,32 @@ object Scanner {
         clauses.flatMap { clause -> patterns.mapNotNull { it.check(clause) } }
 
     /**
+     * [scan] for a home in [place]: the deposit is measured against that place's cap
+     * rather than the loose four-month line, and each ask and reason the place has a
+     * sourced figure for names it. "A deposit no larger than the local legal cap" sends
+     * the reader off to look the number up; "no more than one month's rent" is a sentence
+     * they can put in the letter. Rules the place has nothing on keep their general words.
+     */
+    fun scan(clauses: List<Clause>, place: Place?): List<Finding> {
+        if (place == null) return scan(clauses)
+        val limits = place.limits
+        val rules = patterns.map { rule -> limits.floors[rule.id]?.let(rule::withAtLeast) ?: rule }
+        return clauses.flatMap { clause -> rules.mapNotNull { it.check(clause) } }.map { f ->
+            f.copy(
+                reason = limits.reasons[f.ruleId] ?: f.reason,
+                ask = limits.asks[f.ruleId] ?: f.ask,
+            )
+        }
+    }
+
+    /**
      * [scan] in the order the report shows it. Severity first, then findings that name an
      * actual figure: "Deposit equal to ten months rent" is a harder fact to argue with than
      * "there is a lock-in period", and the top card is the one a reader sees before
      * deciding. The screen and anything that pictures the screen both take this order.
      */
-    fun ranked(clauses: List<Clause>): List<Finding> =
-        scan(clauses).sortedWith(
+    fun ranked(clauses: List<Clause>, place: Place? = null): List<Finding> =
+        scan(clauses, place).sortedWith(
             compareBy(
                 { it.severity.ordinal },
                 { if (it.headline.any(Char::isDigit)) 0 else 1 },

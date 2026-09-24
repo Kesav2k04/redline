@@ -116,6 +116,8 @@ data class ScanUi(
      * instead of being stapled to the end of an unrelated one.
      */
     val photoPages: Int = 0,
+    /** Where the home is, if the reader has said. Null keeps the general wording. */
+    val place: Place? = null,
 )
 
 /**
@@ -140,6 +142,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
             text = saved[KEY_TEXT] ?: "",
             source = saved[KEY_SOURCE],
             photoPages = saved[KEY_PAGES] ?: 0,
+            place = Place.fromName(prefs().getString(KEY_PLACE, null)),
         )
     )
     val ui: StateFlow<ScanUi> = _ui.asStateFlow()
@@ -298,12 +301,25 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         viewModelScope.launch {
             val scanned = withContext(Dispatchers.Default) {
                 val clauses = ClauseSplitter.split(text)
-                val findings = Scanner.ranked(clauses)
+                val findings = Scanner.ranked(clauses, _ui.value.place)
                 ScanState.Scanned(clauses.size, findings, LeaseCheck.looksLikeLease(text))
             }
             _ui.update { it.copy(state = scanned) }
         }
     }
+
+    /**
+     * The reader says where the home is. Kept on the phone, never sent anywhere, and the
+     * open report is scanned again so its asks carry that place's figures at once.
+     */
+    fun choosePlace(place: Place?) {
+        prefs().edit().putString(KEY_PLACE, place?.name).apply()
+        _ui.update { it.copy(place = place) }
+        if (_ui.value.state is ScanState.Scanned) scan()
+    }
+
+    private fun prefs() = getApplication<Application>()
+        .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
 
     fun back() {
         _ui.update { it.copy(state = ScanState.Editing) }
@@ -339,6 +355,8 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     private companion object {
         const val KEY_TEXT = "text"
+        const val PREFS = "redline"
+        const val KEY_PLACE = "place"
         const val KEY_SOURCE = "source"
         const val KEY_PAGES = "photoPages"
         const val MAX_SAVED_CHARS = 100_000

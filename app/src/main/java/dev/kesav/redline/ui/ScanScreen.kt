@@ -136,6 +136,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Activity
 import android.content.ContextWrapper
 import android.content.Intent
+import dev.kesav.redline.Place
 import dev.kesav.redline.ClauseGroup
 import dev.kesav.redline.Scanner
 import dev.kesav.redline.Finding
@@ -163,6 +164,7 @@ fun ScanScreen(
     // "where did eleven come from" after it.
     var showChecks by remember { mutableStateOf(false) }
     var letterFor by remember { mutableStateOf<ScanState.Scanned?>(null) }
+    var choosingPlace by remember { mutableStateOf(false) }
 
     // Without this, a back swipe on the results screen finishes the activity and closes
     // the app. The reader's own lease is still in the text field behind it, so the app
@@ -298,6 +300,8 @@ fun ScanScreen(
                 onBack = viewModel::back,
                 onShare = { scope.launch { context.startActivity(shareReport(context, state)) } },
                 onLetter = { letterFor = state },
+                place = ui.place,
+                onPlace = { choosingPlace = true },
                 onShareCount = { scope.launch { context.startActivity(shareCardIntent(context, state)) } },
                 onChecks = { showChecks = true },
                 modifier = content.graphicsLayer {
@@ -317,6 +321,16 @@ fun ScanScreen(
 
         if (showChecks) {
             ChecksSheet(onDismiss = { showChecks = false })
+        }
+        if (choosingPlace) {
+            PlaceSheet(
+                current = ui.place,
+                onChoose = {
+                    viewModel.choosePlace(it)
+                    choosingPlace = false
+                },
+                onDismiss = { choosingPlace = false },
+            )
         }
         letterFor?.let { scanned ->
             LetterSheet(
@@ -467,6 +481,8 @@ internal fun Results(
     onShareCount: () -> Unit,
     onChecks: () -> Unit,
     modifier: Modifier = Modifier,
+    place: Place? = null,
+    onPlace: () -> Unit = {},
 ) {
     // Never offered for text that is not a lease: the exported report opens "Redline
     // read 4 clauses in this lease", and sending that about a recipe puts the app's
@@ -502,7 +518,8 @@ internal fun Results(
             val more = (state.groups.size - 1).coerceAtLeast(0)
             hint = if (more == 1) "Report open. 1 more clause." else "Report open. $more more clauses."
             delay(120)
-            val firstNew = if (state.looksLikeLease) 2 else 3
+            // The summary, the free card and the place row sit above the first new card.
+            val firstNew = 3
             if (moving) {
                 listState.animateScrollToItem(firstNew, -with(density) { 96.dp.roundToPx() })
             }
@@ -584,6 +601,13 @@ internal fun Results(
         ) {
             item { Summary(state, locked = !unlocked && state.sellable, onShareCount = onShareCount) }
 
+            // Under the first card, where its ask has just said "the local legal limit" and
+            // the reader wants the number. Above it, the row pushed the free card down.
+            val showPlace = state.looksLikeLease && state.findings.isNotEmpty()
+            val placeItem: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+                item(key = "place") { PlaceRow(place, onClick = onPlace, modifier = Modifier.animateItem()) }
+            }
+
             if (!state.looksLikeLease) {
                 item { NotALeaseNotice() }
             }
@@ -596,6 +620,7 @@ internal fun Results(
                     item(key = "clause-${first.clause.index}") {
                         ClauseCard(first, Modifier.entrance(0, settled.value).animateItem())
                     }
+                    if (showPlace) placeItem()
                 }
                 val rest = state.groups.drop(1)
                 if (rest.isNotEmpty()) {
@@ -610,20 +635,23 @@ internal fun Results(
                     }
                 }
             } else {
-                itemsIndexed(state.groups, key = { _, g -> "clause-${g.clause.index}" }) { i, group ->
-                    // After a purchase the index gives way to the clauses it named, each
-                    // growing in a beat after the one above it.
-                    val stagger = minOf(i, RedlineMotion.STAGGER_CAP) * RedlineMotion.STAGGER_MS
-                    ClauseCard(
-                        group,
-                        modifier = Modifier
-                            .entrance(i, settled.value)
-                            .animateItem(
-                                fadeInSpec = motion(tween(240, delayMillis = stagger)),
-                                placementSpec = motion(RedlineMotion.spatial()),
-                            ),
-                        drawMark = revealing,
-                    )
+                state.groups.forEachIndexed { i, group ->
+                    item(key = "clause-${group.clause.index}") {
+                        // After a purchase the index gives way to the clauses it named, each
+                        // growing in a beat after the one above it.
+                        val stagger = minOf(i, RedlineMotion.STAGGER_CAP) * RedlineMotion.STAGGER_MS
+                        ClauseCard(
+                            group,
+                            modifier = Modifier
+                                .entrance(i, settled.value)
+                                .animateItem(
+                                    fadeInSpec = motion(tween(240, delayMillis = stagger)),
+                                    placementSpec = motion(RedlineMotion.spatial()),
+                                ),
+                            drawMark = revealing,
+                        )
+                    }
+                    if (i == 0 && showPlace) placeItem()
                 }
             }
 

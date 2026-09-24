@@ -56,7 +56,7 @@ class SemanticsTest {
     @Test
     fun `the locked index is one spoken sentence naming what is locked, and says what a tap does`() {
         report(unlocked = false)
-        scrollTo(2)
+        scrollTo(3)
         val locked = state.groups.size - 1
         compose.onNode(hasContentDescription("$locked more clauses, locked", substring = true))
             .assertHasClickAction()
