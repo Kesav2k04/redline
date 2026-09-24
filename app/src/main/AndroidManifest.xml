@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- The in-app page scanner. Not required: without a camera the app still reads a PDF,
+         a photo or pasted text, so it stays installable on a device that has none. -->
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <application
         android:name=".RedlineApp"
         android:allowBackup="true"
