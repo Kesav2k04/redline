@@ -15,6 +15,9 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
@@ -170,6 +173,11 @@ class ScreensTest {
             }
         }
         shot("letter")
+        // The reader unticks one and reads what will go.
+        compose.onNodeWithText("There is a lock-in period").performClick()
+        compose.onAllNodes(hasScrollAction()).onFirst()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, 100_000f) }
+        shot("letter-end")
     }
 
     @Test
