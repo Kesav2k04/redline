@@ -1,22 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- page -->
-    <path
-        android:fillColor="#FBFAF7"
-        android:pathData="M38,24h32a4,4 0 0 1 4,4v52a4,4 0 0 1 -4,4h-32a4,4 0 0 1 -4,-4v-52a4,4 0 0 1 4,-4z" />
-
-    <!-- clause lines -->
-    <path
-        android:fillColor="#9AA0A6"
-        android:pathData="M42,36h24v3h-24zM42,45h24v3h-24zM42,66h18v3h-18z" />
-
-    <!-- the redline -->
-    <path
-        android:fillColor="#C0342B"
-        android:pathData="M30,53h48v5h-48z" />
+<!-- A page tilted as it would lie on a desk, and a red pen stroke under the third line that
+     overruns the edge: the clause, marked. Everything sits inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group android:rotation="-6" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="#F2F3F5" android:pathData="M40,29h28a5,5 0 0 1 5,5v40a5,5 0 0 1 -5,5h-28a5,5 0 0 1 -5,-5v-40a5,5 0 0 1 5,-5z"/>
+        <path android:fillColor="#3A3F4A" android:pathData="M43,37h22a2,2 0 0 1 0,4h-22a2,2 0 0 1 0,-4zM43,45h22a2,2 0 0 1 0,4h-22a2,2 0 0 1 0,-4zM43,53h18a2,2 0 0 1 0,4h-18a2,2 0 0 1 0,-4zM43,67h14a2,2 0 0 1 0,4h-14a2,2 0 0 1 0,-4z"/>
+        <path android:strokeColor="#FF6B5E" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M40,61.5C53,59.8 66,59.6 79,60.6"/>
+    </group>
 </vector>
