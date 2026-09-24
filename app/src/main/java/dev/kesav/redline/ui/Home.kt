@@ -252,8 +252,8 @@ private fun Start(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "The scan and its count are free. The full report is " +
-                    (price?.let { "a one-time $it." } ?: "a one-time purchase."),
+                text = "The scan, the score and the count are free. The full report starts at " +
+                    (price?.let { "a one-time $it." } ?: "a one-time payment."),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -347,6 +347,8 @@ private fun Promise() {
                     modifier = Modifier.padding(start = 10.dp).weight(1f),
                 )
             }
+
+            LeaseHero(Modifier.padding(vertical = 4.dp))
 
             RedlinedHeadline(
                 before = "Find the clauses that ",

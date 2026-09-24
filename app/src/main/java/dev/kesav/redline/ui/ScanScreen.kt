@@ -287,7 +287,7 @@ fun ScanScreen(
         when (val state = shown) {
             ScanState.Editing -> Editor(
                 text = ui.text,
-                price = ui.offer?.product?.price?.formatted,
+                price = ui.offers.firstOrNull()?.price ?: ui.offer?.product?.price?.formatted,
                 onText = viewModel::edit,
                 onScan = viewModel::scan,
                 onSample = viewModel::loadSample,
