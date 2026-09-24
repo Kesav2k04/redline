@@ -134,8 +134,11 @@ internal fun PaywallSheet(
             Text(
                 text = pitch ?: buildString {
                     if (serious > 0) append(if (serious == 1) "1 of them is serious. " else "$serious of them are serious. ")
-                    if (exposure != null && exposure.total > 0) {
-                        append("The lease puts ${money(exposure.symbol, exposure.total)} on the line in writing. ")
+                    val total = exposure?.total()
+                    when {
+                        exposure == null || exposure.oneOff.isEmpty() -> Unit
+                        total != null && total > 0 -> append("The lease puts ${money(exposure.symbol, total)} on the line in writing. ")
+                        exposure.months > 0 -> append("The lease puts ${monthsText(exposure.months)} of rent on the line in writing. ")
                     }
                     append("Every clause quoted, why it costs you, and a reply to send.")
                 },

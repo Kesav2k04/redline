@@ -314,6 +314,8 @@ fun ScanScreen(
                 pro = ui.pro,
                 fromPrice = ui.offers.firstOrNull()?.price ?: ui.offer?.product?.price?.formatted,
                 onDocument = { focus -> reading = focus ?: -1 },
+                rent = ui.rent,
+                onRent = viewModel::setRent,
                 onDraft = {
                     if (ui.unlocked || !state.sellable) letterFor = state else paywall = PaywallReason.DRAFT
                 },
@@ -534,6 +536,8 @@ internal fun Results(
     onDocument: (Int?) -> Unit = {},
     onDraft: () -> Unit = onLetter,
     onCompare: () -> Unit = {},
+    rent: Long? = null,
+    onRent: (Long?) -> Unit = {},
 ) {
     // Never offered for text that is not a lease: the exported report opens "Redline
     // read 4 clauses in this lease", and sending that about a recipe puts the app's
@@ -656,7 +660,7 @@ internal fun Results(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Summary(state, locked = !unlocked && state.sellable, onShareCount = onShareCount) }
+            item { Summary(state, locked = !unlocked && state.sellable, onShareCount = onShareCount, rent = rent) }
 
             val insight = state.insight
             if (state.looksLikeLease && state.flaggedClauses > 0) {
@@ -675,7 +679,9 @@ internal fun Results(
                     )
                 }
                 insight.exposure?.takeIf { it.items.isNotEmpty() }?.let { exposure ->
-                    item(key = "money") { MoneyCard(exposure, locked = locked, modifier = Modifier.entrance(3, settled.value)) }
+                    item(key = "money") {
+                        MoneyCard(exposure, locked = locked, rent = rent, onRent = onRent, modifier = Modifier.entrance(3, settled.value))
+                    }
                 }
                 if (place != null && insight.void.isNotEmpty()) {
                     item(key = "void") { VoidCard(place, insight.void, locked = locked, modifier = Modifier.entrance(4, settled.value)) }
@@ -1002,7 +1008,7 @@ private fun BottomBar(lifted: Boolean, content: @Composable () -> Unit) {
  * sitting there reads as a label rather than as a result.
  */
 @Composable
-private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () -> Unit) {
+private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () -> Unit, rent: Long? = null) {
     val hero = LocalHero.current
     val flagged = state.flaggedClauses
     val insight = state.insight
@@ -1119,8 +1125,8 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                     legendAlpha = { legend.value },
                 )
 
-                insight.exposure?.takeIf { it.total > 0 }?.let { exposure ->
-                    ExposureLine(exposure, alpha = { legend.value })
+                insight.exposure?.takeIf { it.oneOff.isNotEmpty() }?.let { exposure ->
+                    ExposureLine(exposure, rent, alpha = { legend.value })
                 }
 
                 // The split is already in the legend, so this line says what happens
@@ -1165,9 +1171,11 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
  * or dollar in it is a number printed in the lease itself; the breakdown card below says which.
  */
 @Composable
-private fun ExposureLine(exposure: dev.kesav.redline.Exposure, alpha: () -> Float) {
+private fun ExposureLine(exposure: dev.kesav.redline.Exposure, rent: Long?, alpha: () -> Float) {
     val hero = LocalHero.current
-    val spoken = "${money(exposure.symbol, exposure.total)} written into the flagged clauses"
+    val total = exposure.total(exposure.rent ?: rent)
+    val figure = total?.let { money(exposure.symbol, it) } ?: monthsText(exposure.months)
+    val spoken = "$figure" + (if (total == null) " of rent" else "") + " written into the flagged clauses"
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1181,15 +1189,15 @@ private fun ExposureLine(exposure: dev.kesav.redline.Exposure, alpha: () -> Floa
     ) {
         IconBadge(RedlineIcons.Wallet, tint = hero.accent, container = hero.accent.copy(alpha = 0.16f), size = 40.dp)
         Column(Modifier.weight(1f)) {
-            Eyebrow("Money at stake", color = hero.muted)
+            Eyebrow(if (total == null) "Rent at stake" else "Money at stake", color = hero.muted)
             Text(
-                money(exposure.symbol, exposure.total),
+                figure,
                 style = FigureStyle.copy(fontSize = 26.sp, lineHeight = 30.sp),
                 color = hero.content,
             )
         }
         Text(
-            text = if (exposure.items.size == 1) "in 1 clause" else "in ${exposure.items.size} clauses",
+            text = if (exposure.oneOff.size == 1) "in 1 clause" else "in ${exposure.oneOff.size} clauses",
             style = MaterialTheme.typography.labelMedium,
             color = hero.muted,
         )

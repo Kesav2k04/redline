@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -61,87 +64,149 @@ internal fun SectionTitle(text: String, modifier: Modifier = Modifier, detail: S
     }
 }
 
+/** Months of rent as words a person says: "10 months", "1 month", "1.5 months". */
+internal fun monthsText(months: Double): String {
+    val n = if (months % 1.0 == 0.0) months.toLong().toString() else "%.1f".format(months)
+    return if (n == "1") "1 month" else "$n months"
+}
+
+/** A cost the way the card shows it: money where the rent is known, the lease's own unit where not. */
+internal fun costText(exposure: Exposure, cost: dev.kesav.redline.Cost, rent: Long?): String {
+    exposure.amountOf(cost, rent)?.let { return money(exposure.symbol, it) }
+    return if (cost.months < 1.0 && cost.every != null) "${(cost.months * 100).toInt()}% of rent" else "${monthsText(cost.months)}' rent"
+}
+
 /**
  * Where the money goes: each sum the flagged clauses write down, as one stacked bar and a row
- * per sum. The bar is the figure's shape (one big deposit or many small fees), which is the
- * thing a total cannot say. Locked, the sums show and the working behind each one waits for
- * the full report, the same way the clause count shows and the clauses wait.
+ * per sum, then the charges that repeat. The bar is the figure's shape (one big deposit or many
+ * small fees), which is the thing a total cannot say.
+ *
+ * Most leases state what is owed as months of rent ("ten months rent") and keep the rent itself
+ * in a schedule, so the card counts in months until the reader types the rent, and then every
+ * row turns into money. Locked, the sums show and the working behind each one waits for the full
+ * report, the same way the clause count shows and the clauses wait.
  */
 @Composable
-internal fun MoneyCard(exposure: Exposure, locked: Boolean, modifier: Modifier = Modifier) {
+internal fun MoneyCard(
+    exposure: Exposure,
+    locked: Boolean,
+    rent: Long?,
+    onRent: (Long?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = risk
-    val items = exposure.items.sortedByDescending { it.amount }
-    val total = exposure.total.coerceAtLeast(1)
+    val scheme = MaterialTheme.colorScheme
+    val monthly = exposure.rent ?: rent
+    val items = exposure.oneOff.sortedByDescending { exposure.amountOf(it, monthly ?: 1) ?: 0 }
+    val shares = items.map { (exposure.amountOf(it, monthly ?: 1) ?: 0).toFloat() }
+    val sumShares = shares.sum().coerceAtLeast(1f)
     val shades = listOf(colors.high, colors.high.copy(alpha = 0.72f), colors.medium, colors.medium.copy(alpha = 0.7f), colors.medium.copy(alpha = 0.45f))
     val animate = animationsEnabled()
     val grow = remember { androidx.compose.animation.core.Animatable(if (animate) 0f else 1f) }
     val growSpec = motion(RedlineMotion.spatialExpressive<Float>())
     LaunchedEffect(Unit) { grow.animateTo(1f, growSpec) }
+    val total = exposure.total(monthly)
 
     KitCard(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconBadge(RedlineIcons.Calculator, colors.high)
             Spacer(Modifier.width(Space.m))
             Column(Modifier.weight(1f)) {
-                Eyebrow("Stated in the lease")
+                Eyebrow("Money at stake")
                 Text(
-                    money(exposure.symbol, exposure.total),
+                    text = total?.let { money(exposure.symbol, it) } ?: "${monthsText(exposure.months)} of rent",
                     style = FigureStyle.copy(fontSize = 28.sp, lineHeight = 32.sp),
                     color = colors.high,
                 )
+                if (total == null && exposure.fixed > 0) {
+                    Text("plus ${money(exposure.symbol, exposure.fixed)}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                }
             }
         }
         Spacer(Modifier.height(Space.m))
         Text(
-            "Money these clauses could take from you, added from the figures they print. Nothing here is estimated.",
+            "Sums these clauses let the landlord take or hold, added from the figures they print. Nothing here is estimated.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = scheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(Space.l))
-        Canvas(Modifier.fillMaxWidth().height(12.dp).clearAndSetSemantics { }) {
-            val gap = 3.dp.toPx()
-            var x = 0f
-            val usable = size.width * grow.value - gap * (items.size - 1).coerceAtLeast(0)
-            items.forEachIndexed { i, cost ->
-                val w = (usable * cost.amount / total).coerceAtLeast(size.height)
-                drawRoundRect(
-                    shades[i.coerceAtMost(shades.lastIndex)],
-                    topLeft = Offset(x, 0f),
-                    size = Size(w, size.height),
-                    cornerRadius = CornerRadius(size.height / 2f),
-                )
-                x += w + gap
-            }
+
+        if (exposure.rent == null && exposure.months > 0) {
+            Spacer(Modifier.height(Space.l))
+            RentField(symbol = exposure.symbol.ifBlank { "$" }, rent = rent, onRent = onRent)
         }
-        Spacer(Modifier.height(Space.m))
-        items.forEachIndexed { i, cost ->
-            if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = Space.s),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Box(
-                    Modifier
-                        .padding(top = 6.dp)
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(shades[i.coerceAtMost(shades.lastIndex)])
-                )
-                Column(Modifier.weight(1f).padding(start = Space.m, end = Space.m)) {
-                    Text(cost.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text(
-                        text = if (locked) "Which clause, and the working, are in the full report." else cost.basis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+        if (items.isNotEmpty()) {
+            Spacer(Modifier.height(Space.l))
+            Canvas(Modifier.fillMaxWidth().height(12.dp).clearAndSetSemantics { }) {
+                val gap = 3.dp.toPx()
+                var x = 0f
+                val usable = size.width * grow.value - gap * (items.size - 1).coerceAtLeast(0)
+                shares.forEachIndexed { i, share ->
+                    val w = (usable * share / sumShares).coerceAtLeast(size.height)
+                    drawRoundRect(
+                        shades[i.coerceAtMost(shades.lastIndex)],
+                        topLeft = Offset(x, 0f),
+                        size = Size(w, size.height),
+                        cornerRadius = CornerRadius(size.height / 2f),
                     )
+                    x += w + gap
                 }
-                Text(
-                    money(exposure.symbol, cost.amount),
-                    style = FigureStyle.copy(fontSize = 15.sp),
-                )
+            }
+            Spacer(Modifier.height(Space.s))
+        }
+        items.forEachIndexed { i, cost ->
+            if (i > 0) HorizontalDivider(color = scheme.outlineVariant)
+            CostRow(cost, costText(exposure, cost, monthly), shades[i.coerceAtMost(shades.lastIndex)], locked)
+        }
+        if (exposure.repeating.isNotEmpty()) {
+            Spacer(Modifier.height(Space.m))
+            Eyebrow("Charges that repeat")
+            exposure.repeating.forEach { cost ->
+                CostRow(cost, costText(exposure, cost, monthly) + ", " + (cost.every ?: ""), colors.medium.copy(alpha = 0.5f), locked)
             }
         }
     }
+}
+
+@Composable
+private fun CostRow(cost: dev.kesav.redline.Cost, figure: String, dot: Color, locked: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = Space.s),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(Modifier.padding(top = 6.dp).size(8.dp).clip(CircleShape).background(dot))
+        Column(Modifier.weight(1f).padding(start = Space.m, end = Space.m)) {
+            Text(cost.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(
+                text = if (locked) "Which clause, and the working, are in the full report." else cost.basis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(figure, style = FigureStyle.copy(fontSize = 14.sp), textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 150.dp))
+    }
+}
+
+/** The one input on the report: the monthly rent, digits only, kept for this lease on this phone. */
+@Composable
+private fun RentField(symbol: String, rent: Long?, onRent: (Long?) -> Unit) {
+    var text by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(rent?.toString() ?: "") }
+    androidx.compose.material3.OutlinedTextField(
+        value = text,
+        onValueChange = { v ->
+            val digits = v.filter(Char::isDigit).take(9)
+            text = digits
+            onRent(digits.toLongOrNull())
+        },
+        label = { Text("Monthly rent") },
+        prefix = { Text(symbol, style = FigureStyle) },
+        supportingText = { Text("Turns months of rent into money. Stays on this phone.") },
+        singleLine = true,
+        textStyle = FigureStyle.copy(fontSize = 18.sp),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /**

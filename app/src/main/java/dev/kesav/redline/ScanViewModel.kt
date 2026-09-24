@@ -51,6 +51,8 @@ sealed interface ScanState {
         val looksLikeLease: Boolean = true,
         /** Where the home is, as it was when this scan ran. */
         val place: Place? = null,
+        /** Every clause, flagged or not, in document order, for the marked-up reading view. */
+        val clauses: List<Clause> = emptyList(),
     ) : ScanState {
         /**
          * The findings, one entry per clause, in the order the findings were sorted.
@@ -94,7 +96,7 @@ sealed interface ScanState {
             .size
 
         /** The score, the four categories, the money and the void clauses, computed once. */
-        val insight: Insight = Insights.of(findings, clauseCount, place)
+        val insight: Insight = Insights.of(findings, clauseCount, place, clauses)
     }
 }
 
@@ -109,6 +111,8 @@ data class ScanUi(
     val passes: Set<String> = emptySet(),
     /** What the paywall can sell, pass first, from the current offering. */
     val offers: List<Offer> = emptyList(),
+    /** The monthly rent the reader typed, for leases that state rent only in months. */
+    val rent: Long? = null,
     /** False until the first entitlement read lands. Distinct from `unlocked == false`. */
     val entitlementsKnown: Boolean = false,
     val busy: Boolean = false,
@@ -232,7 +236,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
     fun edit(text: String) {
         // Typing makes it the reader's text, so the note saying which file it came from
         // stops being true and goes.
-        _ui.update { it.copy(text = text, state = ScanState.Editing, source = null, photoPages = 0) }
+        _ui.update { it.copy(text = text, state = ScanState.Editing, source = null, photoPages = 0, rent = null) }
     }
 
     /**
@@ -328,7 +332,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
             val scanned = withContext(Dispatchers.Default) {
                 val clauses = ClauseSplitter.split(text)
                 val findings = Scanner.ranked(clauses, _ui.value.place)
-                ScanState.Scanned(clauses.size, findings, LeaseCheck.looksLikeLease(text), _ui.value.place)
+                ScanState.Scanned(clauses.size, findings, LeaseCheck.looksLikeLease(text), _ui.value.place, clauses)
             }
             _ui.update { it.copy(state = scanned).withAccess() }
         }
@@ -413,6 +417,11 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
             val error = Billing.restore()
             _ui.update { it.copy(busy = false, message = error) }
         }
+    }
+
+    /** Kept for this lease only: typing a new lease clears it. Never leaves the phone. */
+    fun setRent(rent: Long?) {
+        _ui.update { it.copy(rent = rent?.takeIf { r -> r > 0 }) }
     }
 
     fun say(message: String) {
