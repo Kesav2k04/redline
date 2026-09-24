@@ -13,9 +13,10 @@ have their own set, and the engine does not care which set it loads.
 a bundled file would let the bank update without shipping an APK, and would let someone
 contribute a rule without writing Kotlin.
 
-**Jurisdiction-aware limits.** "Several states cap deposits at two or three months" is
-currently prose in a reason string. It should be a table, keyed by state, so the app can
-say which limit a clause actually breaches.
+**More places.** Six are in (`Places.kt`): California, New York, Massachusetts, Texas,
+England and India, each figure quoted from its statute. More US states are the obvious
+next step, and India would be better served state by state, since the Model Tenancy Act is
+a proposal that Maharashtra, Karnataka and Delhi have not adopted.
 
 **Deadline reminders.** A lease that renews itself unless notice is given sixty days
 before the end already trips the auto-renewal rule. Reading the end date and the notice

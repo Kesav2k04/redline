@@ -266,12 +266,38 @@ Every rule carries the change to ask for: "a deposit no larger than the local le
 "at least 24 hours written notice before any entry, except in an emergency". It appears
 on the card under the reason.
 
-After purchase, **Ask the landlord for these changes** drafts a short letter from those
-asks, grouped by clause number, in the first person of someone who still wants the flat.
-It carries no verdicts and no quotes of the scanner's reasons, because the landlord wrote
-the lease and does not need to be told it is unfair. It leaves through the share sheet,
-so the app never holds an address or a copy. The full report, with every clause quoted
-and every reason, still goes to a parent or an adviser from the same screen.
+"The local legal cap" sends the reader off to look the number up. So the report asks,
+once, **where the home is**, and keeps the answer on the phone. For six places the asks
+and reasons then carry that place's own figure and the law it comes from. In
+Massachusetts the free late-fee card says "no late fee or interest until rent is 30 days
+overdue, as Massachusetts General Laws chapter 186, section 15B requires", under a clause
+that charges one after three days. The thresholds move too: a two-month deposit is
+flagged in New York, where the cap is one month, and not in Texas, which sets none.
+
+| Place | Deposit cap | Deposit back within | Late fee |
+|---|---|---|---|
+| California | 1 month (2 for a landlord with at most two properties) | 21 days | a fair estimate of the cost only |
+| New York | 1 month | 14 days | after 5 days, the lesser of $50 or 5% |
+| Massachusetts | 1 month | 30 days | none until 30 days overdue |
+| Texas | none | 30 days | after 2 full days, presumed fair up to 10% (12% in small buildings) |
+| England | 5 weeks | 10 days after agreeing the amount | none; interest only, after 14 days |
+| India | none in most states; the Model Tenancy Act proposes 2 months | | |
+
+Every figure was read in the statute or on an official page, cited beside it in
+[`Places.kt`](app/src/main/java/dev/kesav/redline/Places.kt). What could only be
+confirmed second-hand was left out rather than guessed: England's entry notice, and the
+late-fee percentages Californian and Massachusetts courts tend to accept. Anywhere else,
+the general wording stays. `PlacesTest` pins each moved threshold with a clause on either
+side of it.
+
+After purchase, **Ask the landlord for these changes** opens the letter before it goes:
+one line per flagged clause with a tick box (serious ones start ticked), and underneath,
+exactly the text that will be sent. The letter is built from the asks, grouped by clause
+number, in the first person of someone who still wants the flat. It carries no verdicts
+and no quotes of the scanner's reasons, because the landlord wrote the lease and does not
+need to be told it is unfair. It leaves through the share sheet, so the app never holds
+an address or a copy. The full report, with every clause quoted and every reason, still
+goes to a parent or an adviser from the same screen, as text and a PDF.
 
 ## Splitting a lease into clauses
 
