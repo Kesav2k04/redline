@@ -63,6 +63,8 @@ class SemanticsTest {
         // Every subject is in that sentence, so nothing on screen is withheld from the ear.
         val first = state.groups.drop(1).first().findings.first().topic
         compose.onNode(hasContentDescription(first, substring = true)).assertHasClickAction()
+        // The rows show severity by colour only, so the sentence has to say it.
+        compose.onNode(hasContentDescription(", serious", substring = true)).assertHasClickAction()
     }
 
     @Test

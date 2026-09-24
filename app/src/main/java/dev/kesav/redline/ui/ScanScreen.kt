@@ -390,8 +390,8 @@ private fun ChecksSheet(onDismiss: () -> Unit) {
                 // swaps in figures read from that place's statutes (Places.kt).
                 text = "Each one looks for a specific term and, where there is a number, " +
                     "reads it and compares it with the range usual in residential leases. " +
-                    "Tell the report where the home is and, for six places, deposits, late " +
-                    "fees and entry are measured against that place's own law instead. " +
+                    "Tell the report where the home is and, for six places, deposits and " +
+                    "late fees are measured against that place's own law instead. " +
                     "Either way, treat a flag as a question to ask.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1321,9 +1321,12 @@ private fun LockedIndex(locked: List<ClauseGroup>, onTap: () -> Unit, modifier: 
             .sortedWith(compareBy { !it.serious })
     }
     val more = if (locked.size == 1) "1 more clause, locked" else "${locked.size} more clauses, locked"
-    val spoken = "$more. " + topics.joinToString("; ") {
-        "${it.name}, " + if (it.clauses == 1) "1 clause" else "${it.clauses} clauses"
-    }
+    // The rows mark severity by colour alone, so the spoken version says it in words.
+    val spoken = "$more. In the full report: each clause quoted, why it costs you, and what to ask for. " +
+        topics.joinToString("; ") {
+            "${it.name}, " + (if (it.clauses == 1) "1 clause" else "${it.clauses} clauses") +
+                if (it.serious) ", serious" else ", worth checking"
+        }
     val press = remember { MutableInteractionSource() }
     Surface(
         onClick = onTap,
