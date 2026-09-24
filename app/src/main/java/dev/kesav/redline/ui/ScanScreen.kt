@@ -1,6 +1,7 @@
 package dev.kesav.redline.ui
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
@@ -118,6 +119,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import android.content.ClipData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.animation.core.animate
+import kotlin.coroutines.cancellation.CancellationException
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -154,7 +159,28 @@ fun ScanScreen(
     // Without this, a back swipe on the results screen finishes the activity and closes
     // the app. The reader's own lease is still in the text field behind it, so the app
     // shutting down looks like it crashed rather than like it navigated.
-    BackHandler(enabled = ui.state is ScanState.Scanned) { viewModel.back() }
+    // Back from the report previews itself: during the gesture the report shrinks toward
+    // 90% and drifts from the edge being swiped, as Material's guidance describes for an
+    // app that manages its own screens. Letting go commits; a cancelled swipe springs back
+    // with a slight overshoot that absorbs the tension of the drag.
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    var backEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
+    val previewBack = animationsEnabled()
+    PredictiveBackHandler(enabled = ui.state is ScanState.Scanned) { events ->
+        try {
+            events.collect { e ->
+                if (previewBack) {
+                    backProgress = e.progress
+                    backEdge = e.swipeEdge
+                }
+            }
+            viewModel.back()
+            backProgress = 0f
+        } catch (c: CancellationException) {
+            animate(backProgress, 0f, animationSpec = RedlineMotion.spatialBouncy()) { v, _ -> backProgress = v }
+            throw c
+        }
+    }
 
     LaunchedEffect(sharedText) { viewModel.seed(sharedText) }
     LaunchedEffect(sharedFile) { viewModel.seedFile(sharedFile) }
@@ -265,7 +291,15 @@ fun ScanScreen(
                 onLetter = { Report.letter(state)?.let { context.startActivity(shareLetter(it)) } },
                 onShareCount = { scope.launch { context.startActivity(shareCardIntent(context, state)) } },
                 onChecks = { showChecks = true },
-                modifier = content,
+                modifier = content.graphicsLayer {
+                    val p = RedlineMotion.Decelerate.transform(backProgress)
+                    scaleX = 1f - 0.1f * p
+                    scaleY = scaleX
+                    val shift = (size.width / 20f - 8.dp.toPx()) * p
+                    translationX = if (backEdge == BackEventCompat.EDGE_LEFT) shift else -shift
+                    shape = RoundedCornerShape(28.dp * p)
+                    clip = p > 0f
+                },
             )
         }
         }
