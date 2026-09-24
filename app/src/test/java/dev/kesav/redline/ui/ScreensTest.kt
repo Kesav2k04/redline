@@ -45,7 +45,7 @@ class ScreensTest {
 
     private fun sample(): ScanState.Scanned {
         val clauses = ClauseSplitter.split(File("src/main/assets/sample_lease.txt").readText())
-        return ScanState.Scanned(clauses.size, Scanner.scan(clauses))
+        return ScanState.Scanned(clauses.size, Scanner.ranked(clauses))
     }
 
     private fun screen(content: @Composable () -> Unit) {
@@ -84,6 +84,25 @@ class ScreensTest {
     fun startDark() {
         screen { Start() }
         shot("start-dark")
+    }
+
+    @Test
+    fun reading() {
+        // With animations off the pen stands where the page count says it is, which is the
+        // one frame that shows the tilt, the read lines and the bar together. With them on,
+        // the test clock cancels the endless sweep and the pen never appears.
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<Application>()
+        android.provider.Settings.Global.putFloat(
+            context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 0f,
+        )
+        screen {
+            Editor(
+                text = "", price = "$4.99", onText = {}, onScan = {}, onSample = {}, onChecks = {},
+                reading = "Reading page 3 of 5", source = null, photoPages = 0, onOpen = {}, onPhoto = {},
+                readingProgress = 0.4f,
+            )
+        }
+        shot("reading")
     }
 
     @Test

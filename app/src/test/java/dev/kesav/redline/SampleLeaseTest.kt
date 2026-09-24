@@ -15,13 +15,7 @@ class SampleLeaseTest {
     fun `the bundled sample produces a readable report`() {
         val text = File("src/main/assets/sample_lease.txt").readText()
         val clauses = ClauseSplitter.split(text)
-        val findings = Scanner.scan(clauses).sortedWith(
-            compareBy(
-                { it.severity.ordinal },
-                { if (it.headline.any(Char::isDigit)) 0 else 1 },
-                { it.clause.index },
-            )
-        )
+        val findings = Scanner.ranked(clauses)
 
         println("clauses: ${clauses.size}")
         println("findings: ${findings.size} over ${findings.map { it.clause.index }.distinct().size} clauses")

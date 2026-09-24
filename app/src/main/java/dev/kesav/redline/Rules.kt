@@ -494,4 +494,19 @@ object Scanner {
 
     fun scan(clauses: List<Clause>): List<Finding> =
         clauses.flatMap { clause -> patterns.mapNotNull { it.check(clause) } }
+
+    /**
+     * [scan] in the order the report shows it. Severity first, then findings that name an
+     * actual figure: "Deposit equal to ten months rent" is a harder fact to argue with than
+     * "there is a lock-in period", and the top card is the one a reader sees before
+     * deciding. The screen and anything that pictures the screen both take this order.
+     */
+    fun ranked(clauses: List<Clause>): List<Finding> =
+        scan(clauses).sortedWith(
+            compareBy(
+                { it.severity.ordinal },
+                { if (it.headline.any(Char::isDigit)) 0 else 1 },
+                { it.clause.index },
+            )
+        )
 }

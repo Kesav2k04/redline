@@ -103,6 +103,8 @@ data class ScanUi(
     val offer: Package? = null,
     /** What the reader is waiting on while a PDF or photo is read, or null when idle. */
     val reading: String? = null,
+    /** How much of a multi-page PDF has been read, 0 to 1, or null when there is no count. */
+    val readingProgress: Float? = null,
     /** Where the text in the field came from, when it came from a file. */
     val source: String? = null,
     /**
@@ -219,17 +221,17 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
     fun import(uri: Uri, photo: Boolean = false, after: () -> Unit = {}) {
         if (_ui.value.reading != null) return after()
         viewModelScope.launch {
-            _ui.update { it.copy(reading = "Opening the file", message = null) }
+            _ui.update { it.copy(reading = "Opening the file", readingProgress = null, message = null) }
             val result = try {
-                LeaseImport.read(getApplication(), uri) { step ->
-                    _ui.update { it.copy(reading = step) }
+                LeaseImport.read(getApplication(), uri) { step, done ->
+                    _ui.update { it.copy(reading = step, readingProgress = done) }
                 }
             } finally {
                 after()
             }
             when (result) {
                 is LeaseImport.Result.Failed ->
-                    _ui.update { it.copy(reading = null, message = result.message) }
+                    _ui.update { it.copy(reading = null, readingProgress = null, message = result.message) }
 
                 is LeaseImport.Result.Read -> _ui.update { ui ->
                     val adding = photo && ui.photoPages > 0
@@ -238,6 +240,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                         text = if (adding) ui.text.trimEnd() + "\n\n" + result.text else result.text,
                         state = ScanState.Editing,
                         reading = null,
+                        readingProgress = null,
                         photoPages = pages,
                         source = describe(result, pages),
                     )
@@ -283,17 +286,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         viewModelScope.launch {
             val scanned = withContext(Dispatchers.Default) {
                 val clauses = ClauseSplitter.split(text)
-                // Severity first, then findings that name an actual figure. "Deposit
-                // equal to ten months rent" is a harder fact to argue with than "there
-                // is a lock-in period", and the top card is the one a reader sees
-                // before deciding.
-                val findings = Scanner.scan(clauses).sortedWith(
-                    compareBy(
-                        { it.severity.ordinal },
-                        { if (it.headline.any(Char::isDigit)) 0 else 1 },
-                        { it.clause.index },
-                    )
-                )
+                val findings = Scanner.ranked(clauses)
                 ScanState.Scanned(clauses.size, findings, LeaseCheck.looksLikeLease(text))
             }
             _ui.update { it.copy(state = scanned) }

@@ -257,6 +257,7 @@ fun ScanScreen(
                 onSample = viewModel::loadSample,
                 onChecks = { showChecks = true },
                 reading = ui.reading,
+                readingProgress = ui.readingProgress,
                 source = ui.source,
                 photoPages = ui.photoPages,
                 onOpen = { openFile.launch(arrayOf("application/pdf", "image/*", "text/plain")) },

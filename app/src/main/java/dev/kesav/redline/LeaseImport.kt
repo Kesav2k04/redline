@@ -66,7 +66,7 @@ object LeaseImport {
     suspend fun read(
         context: Context,
         uri: Uri,
-        progress: (String) -> Unit,
+        progress: (step: String, done: Float?) -> Unit,
     ): Result = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
         val name = displayName(context, uri)
@@ -96,7 +96,7 @@ object LeaseImport {
         context: Context,
         uri: Uri,
         name: String?,
-        progress: (String) -> Unit,
+        progress: (String, Float?) -> Unit,
     ): Result {
         // PdfRenderer needs a seekable descriptor, and a mail attachment is often a pipe.
         // Copying to the cache is the one approach that works for every provider, and
@@ -116,7 +116,8 @@ object LeaseImport {
                     val pages = mutableListOf<List<String>>()
 
                     for (i in 0 until count) {
-                        progress("Reading page ${i + 1} of $count")
+                        // The share of pages already read, once there is more than one to count.
+                        progress("Reading page ${i + 1} of $count", if (count > 1) i.toFloat() / count else null)
                         val page = renderer.openPage(i)
                         try {
                             val layer = textLayer(page)
@@ -171,9 +172,9 @@ object LeaseImport {
         context: Context,
         uri: Uri,
         name: String?,
-        progress: (String) -> Unit,
+        progress: (String, Float?) -> Unit,
     ): Result {
-        progress("Reading the photo")
+        progress("Reading the photo", null)
         val resolver = context.contentResolver
 
         // Decoded at a fraction of full size: a phone photo is 12 to 50 megapixels, and

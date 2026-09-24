@@ -1,6 +1,5 @@
 package dev.kesav.redline.ui
 
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -75,6 +74,12 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import dev.kesav.redline.Scanner
 
@@ -102,13 +107,14 @@ internal fun Editor(
     onOpen: () -> Unit,
     onPhoto: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    readingProgress: Float? = null,
 ) {
     // Set by the paste tile when the clipboard is empty, so there is a field to type or
     // paste into. Saved, so rotating the phone does not throw the reader back a step.
     var composing by rememberSaveable { mutableStateOf(false) }
 
     when {
-        reading != null -> Reading(reading, modifier)
+        reading != null -> Reading(reading, readingProgress, modifier)
 
         text.isNotEmpty() || composing -> Document(
             text = text,
@@ -521,23 +527,27 @@ private fun Tile(
 }
 
 /**
- * Waiting on a PDF or a photo. A page with a red line travelling down it, because the
- * wait is the app reading, and a spinner says nothing about what it is waiting for.
+ * Waiting on a PDF or a photo. A sheet on a desk with a red pen line reading down it, the
+ * lines above the pen darkening as they are read, because the wait is the app reading and
+ * a spinner says nothing about what it is waiting for.
  */
 @Composable
-private fun Reading(step: String, modifier: Modifier = Modifier) {
+private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val moving = animationsEnabled()
+    // One way, top to bottom, then back to the top unseen. Going back and forth read as a
+    // barcode scanner; a reader only ever moves down the page.
     val sweep = if (moving) {
         rememberInfiniteTransition(label = "reading").animateFloat(
-            initialValue = 0.08f,
-            targetValue = 0.92f,
-            animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Reverse),
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Restart),
             label = "sweep",
         ).value
     } else {
-        0.5f
+        progress ?: 0.5f
     }
+    val done by animateFloatAsState(progress ?: 0f, motion(RedlineMotion.effects()), label = "done")
 
     Column(
         modifier = modifier.fillMaxSize().padding(24.dp),
@@ -547,17 +557,30 @@ private fun Reading(step: String, modifier: Modifier = Modifier) {
         Box(
             Modifier
                 .size(width = 132.dp, height = 172.dp)
+                // Tipped back like a page lying in front of the reader. It holds still; only
+                // the pen moves.
+                .graphicsLayer {
+                    rotationX = 12f
+                    cameraDistance = 16f * density
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                }
                 .clip(MaterialTheme.shapes.medium)
                 .background(scheme.surfaceContainerLowest)
                 .drawBehind {
                     val pad = 18.dp.toPx()
                     val gap = 14.dp.toPx()
+                    val pen = size.height * sweep
+                    // In over the first tenth of a pass and out over the last, so the jump
+                    // back to the top happens while nothing is drawn. The read lines fade
+                    // back with it rather than snapping to unread.
+                    val ink = if (moving) (minOf(sweep, 1f - sweep) / 0.1f).coerceIn(0f, 1f) else 1f
+                    val read = lerp(scheme.outlineVariant, scheme.onSurfaceVariant, ink)
                     var y = pad + 6.dp.toPx()
                     var i = 0
                     while (y < size.height - pad) {
                         val w = (size.width - pad * 2) * if (i % 4 == 3) 0.55f else 1f
                         drawRoundRect(
-                            color = scheme.outlineVariant,
+                            color = if (y < pen) read else scheme.outlineVariant,
                             topLeft = Offset(pad, y),
                             size = Size(w, 5.dp.toPx()),
                             cornerRadius = CornerRadius(3.dp.toPx()),
@@ -565,9 +588,19 @@ private fun Reading(step: String, modifier: Modifier = Modifier) {
                         y += gap
                         i++
                     }
+                    val trail = 24.dp.toPx()
                     drawRect(
-                        color = scheme.primary,
-                        topLeft = Offset(0f, size.height * sweep),
+                        brush = Brush.verticalGradient(
+                            listOf(Color.Transparent, scheme.primary.copy(alpha = 0.18f * ink)),
+                            startY = pen - trail,
+                            endY = pen,
+                        ),
+                        topLeft = Offset(0f, pen - trail),
+                        size = Size(size.width, trail),
+                    )
+                    drawRect(
+                        color = scheme.primary.copy(alpha = ink),
+                        topLeft = Offset(0f, pen),
                         size = Size(size.width, 3.dp.toPx()),
                     )
                 },
@@ -577,7 +610,13 @@ private fun Reading(step: String, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
-        LinearProgressIndicator(modifier = Modifier.width(180.dp).clip(RoundedCornerShape(2.dp)))
+        // A count when there is one to give. A photo is one step with no parts to count.
+        val bar = Modifier.width(180.dp).clip(RoundedCornerShape(2.dp))
+        if (progress != null) {
+            LinearProgressIndicator(progress = { done }, modifier = bar)
+        } else {
+            LinearProgressIndicator(modifier = bar)
+        }
         Text(
             text = "Read on this phone. Nothing leaves it.",
             style = MaterialTheme.typography.bodyMedium,
