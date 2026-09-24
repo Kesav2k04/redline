@@ -108,6 +108,16 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import android.content.ClipData
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -188,7 +198,31 @@ fun ScanScreen(
             .fillMaxSize()
             .wrapContentWidth(Alignment.CenterHorizontally)
             .widthIn(max = 640.dp)
-        when (val state = ui.state) {
+        // The scan is one continuous move: the Scan button grows into the verdict panel
+        // (see Verdict.kt). Only the change between editing and a report animates; a
+        // rescan from the report keeps its screen.
+        val enter = motion(tween<Float>(220, delayMillis = 120))
+        val leave = motion(tween<Float>(90))
+        val backIn = motion(tween<Float>(200, delayMillis = 60))
+        val backOut = motion(tween<Float>(120, easing = RedlineMotion.Accelerate))
+        SharedTransitionLayout {
+        AnimatedContent(
+            targetState = ui.state,
+            contentKey = { it is ScanState.Scanned },
+            transitionSpec = {
+                if (targetState is ScanState.Scanned) {
+                    fadeIn(enter) togetherWith (fadeOut(leave) + scaleOut(targetScale = 0.98f))
+                } else {
+                    (fadeIn(backIn) + scaleIn(initialScale = 0.98f)) togetherWith fadeOut(backOut)
+                }
+            },
+            label = "scan",
+        ) { shown ->
+        CompositionLocalProvider(
+            LocalSharedScope provides this@SharedTransitionLayout,
+            LocalVisibilityScope provides this,
+        ) {
+        when (val state = shown) {
             ScanState.Editing -> Editor(
                 text = ui.text,
                 price = ui.offer?.product?.price?.formatted,
@@ -227,12 +261,15 @@ fun ScanScreen(
                 onUnlock = { activity?.let(viewModel::buy) },
                 onRestore = viewModel::restore,
                 onBack = viewModel::back,
-                onShare = { context.startActivity(shareReport(state)) },
+                onShare = { scope.launch { context.startActivity(shareReport(context, state)) } },
                 onLetter = { Report.letter(state)?.let { context.startActivity(shareLetter(it)) } },
                 onShareCount = { scope.launch { context.startActivity(shareCardIntent(context, state)) } },
                 onChecks = { showChecks = true },
                 modifier = content,
             )
+        }
+        }
+        }
         }
 
         if (showChecks) {
@@ -309,19 +346,30 @@ private fun ChecksSheet(onDismiss: () -> Unit) {
  * The lease arrives by share and the argument leaves the same way.
  *
  * `createChooser` rather than a bare ACTION_SEND, so the reader picks the app instead of
- * being sent wherever the system last defaulted to. Nothing is written to disk on the
- * way out: the text goes straight into the intent, which keeps the promise that the
- * lease never leaves the phone except when its owner decides to send it.
+ * being sent wherever the system last defaulted to. The PDF is written to the app's own
+ * cache under one fixed name, so each share replaces the last, and it leaves the phone only
+ * when its owner picks somewhere to send it.
  */
-private fun shareReport(state: ScanState.Scanned): Intent {
-    val send = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, Report.SUBJECT)
-        putExtra(Intent.EXTRA_TEXT, Report.build(state))
+private suspend fun shareReport(context: android.content.Context, state: ScanState.Scanned): Intent =
+    withContext(Dispatchers.Default) {
+        // The text is the message body; the PDF rides along as the page to hand over. If the
+        // PDF cannot be written, the text still goes.
+        val pdf = runCatching { ReportPdf.write(context, state) }.getOrNull()
+        val send = Intent(Intent.ACTION_SEND).apply {
+            putExtra(Intent.EXTRA_SUBJECT, Report.SUBJECT)
+            putExtra(Intent.EXTRA_TEXT, Report.build(state))
+            if (pdf != null) {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", pdf)
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri(null, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } else {
+                type = "text/plain"
+            }
+        }
+        Intent.createChooser(send, "Send the full report").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    return Intent.createChooser(send, "Send this list")
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-}
 
 /**
  * The letter goes out the same way as the report, through the reader's own apps, so the
@@ -352,7 +400,7 @@ private fun android.content.Context.findActivity(): Activity? {
  * something nobody has yet been given a reason to want.
  */
 @Composable
-private fun Results(
+internal fun Results(
     state: ScanState.Scanned,
     unlocked: Boolean,
     known: Boolean,
@@ -514,7 +562,7 @@ private fun Results(
                     ) {
                         Icon(RedlineIcons.Checks, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Text(
-                            "What Redline checks, all ${Scanner.ruleCount} of them",
+                            "See all ${Scanner.ruleCount} checks",
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.weight(1f),
                         )
@@ -725,11 +773,17 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
     val haptics = LocalHapticFeedback.current
     val shown = remember(state) { Animatable(if (moving) 0f else flagged.toFloat()) }
     val legend = remember(state) { Animatable(if (moving) 0f else 1f) }
+    val visibility = LocalVisibilityScope.current
     LaunchedEffect(state) {
         if (!moving || flagged == 0) {
             shown.snapTo(flagged.toFloat())
             legend.snapTo(1f)
             return@LaunchedEffect
+        }
+        // The count starts when the Scan button has finished becoming this panel, so the
+        // number climbs in place rather than inside a moving box.
+        visibility?.let { v ->
+            withTimeoutOrNull(900) { snapshotFlow { v.transition.isRunning }.first { !it } }
         }
         // Longer for a bigger number so 3 does not crawl and 30 does not blur, slowing onto
         // the last digit so it lands with weight. A light tick per number and one firm
@@ -753,7 +807,7 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
         color = hero.container,
         contentColor = hero.content,
         shape = MaterialTheme.shapes.extraLarge,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.verdict().fillMaxWidth(),
     ) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (flagged == 0 || !state.looksLikeLease) {
@@ -1071,9 +1125,11 @@ private fun Modifier.entrance(index: Int, settled: Boolean): Modifier {
     val fade = remember { Animatable(if (play) 0f else 1f) }
     LaunchedEffect(Unit) {
         if (play) {
-            delay((minOf(index, RedlineMotion.STAGGER_CAP) * RedlineMotion.STAGGER_MS).toLong())
-            launch { rise.animateTo(0f, RedlineMotion.spatial()) }
-            fade.animateTo(1f, RedlineMotion.effects())
+            // The stagger rides on the animation clock rather than a coroutine delay, so it
+            // pauses, scales and is tested like every other part of the motion.
+            val wait = minOf(index, RedlineMotion.STAGGER_CAP) * RedlineMotion.STAGGER_MS
+            launch { rise.animateTo(0f, tween(360, delayMillis = wait, easing = RedlineMotion.Decelerate)) }
+            fade.animateTo(1f, tween(240, delayMillis = wait))
         }
     }
     return graphicsLayer {

@@ -73,6 +73,8 @@ import androidx.compose.foundation.border
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
 import dev.kesav.redline.Scanner
 
@@ -688,13 +690,39 @@ private fun Document(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            // Never disabled. A dead button told a TalkBack reader nothing about why it did
+            // not respond; a tap on an empty field now says what is missing.
+            val haptic = LocalHapticFeedback.current
+            var empty by remember { mutableStateOf(false) }
             Button(
-                onClick = onScan,
-                enabled = text.isNotBlank(),
+                onClick = {
+                    if (text.isBlank()) {
+                        haptic.performHapticFeedback(HapticFeedbackType.Reject)
+                        empty = true
+                    } else {
+                        onScan()
+                    }
+                },
                 shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                modifier = Modifier.verdict().fillMaxWidth().heightIn(min = 56.dp),
             ) {
                 Text("Scan", style = MaterialTheme.typography.labelLarge)
+            }
+            if (empty && text.isBlank()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                ) {
+                    Box(Modifier.size(6.dp).background(scheme.primary, RoundedCornerShape(3.dp)))
+                    Text(
+                        "Paste or type the lease first",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
             }
             Surface(onClick = onChecks, color = Color.Transparent, shape = MaterialTheme.shapes.small) {
                 Text(
