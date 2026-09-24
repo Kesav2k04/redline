@@ -160,6 +160,23 @@ Where each row came from is in its `origin` and `source` columns:
   lease form, which states no licence, so the wording here is new and only the substance
   is the form's.
 
+### A whole US lease
+
+`us-lease.txt` is a sixteen-clause lease written after the rules, in the wording US leases
+use rather than the wording of this set. Nine of its clauses cost the tenant something. On
+the first run the rules found six of those nine for the right reason. They read the renewal
+clause ("renews automatically for a further twelve months unless the Tenant gives written
+notice at least ninety days before") as a twelve month notice period, and missed two
+clauses outright: the tenant accepting the flat as is and paying for all repairs, and the
+rent rising at any time. Inside clauses they did flag, they missed a deposit that earns no
+interest, professional carpet cleaning, and liability for the rest of the term.
+
+Seven anchors were widened to that wording, four of them with a sentence they must not
+fire on, and the notice rule now takes a figure only within 24 characters of "notice". The
+lease now reads 9 of 9 costly clauses, with 14 findings, and nothing moved on the frozen
+corpus, the held-out set, the 94 clauses above or the bundled sample. Having been fixed
+against, the lease is a regression check now (`UsLeaseTest`), like the rest.
+
 ## What the corpus was hiding
 
 20 of 20 and 10 of 10 was believed for longer than it deserved. The benign half of that

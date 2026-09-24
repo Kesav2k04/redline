@@ -184,7 +184,7 @@ private val patterns = listOf(
     ),
     Pattern(
         id = "deposit-no-interest", topic = "Your deposit", severity = Severity.MEDIUM,
-        all = listOf(Regex("\\b(?:deposit)"), Regex("\\b(?:interest free|not carry interest|without interest)")),
+        all = listOf(Regex("\\b(?:deposit)"), Regex("\\b(?:interest.free|without interest|not (?:carry|earn|bear|accrue|attract) (?:any )?interest|(?:bear|earn|carry) no interest)")),
         headline = { "The deposit earns you nothing" },
         reason = "The landlord holds a large sum for the full term and keeps any return on it.",
         ask = "the deposit held in a separate account, with any interest it earns added when it is returned",
@@ -223,8 +223,9 @@ private val patterns = listOf(
         all = listOf(
             Regex("\\b(?:repair|structur)"),
             Regex("\\b(?:tenant)"),
-            Regex("\\b(?:own expense|own cost|tenant.s cost|borne solely by the tenant|borne by the tenant)"),
+            Regex("\\b(?:own expense|own cost|tenant.s cost|borne solely by the tenant|borne by the tenant|(?:shall|will|must|agrees? to) (?:pay for|be responsible for|bear the cost of) all (?:maintenance and |necessary )?repairs)"),
         ),
+        none = listOf(Regex("\\b(?:landlord|lessor|owner) (?:shall|will|must|agrees? to) (?:pay for|be responsible for|bear the cost of) all")),
         headline = { "You pay for repairs the owner would normally cover" },
         reason = "Structural upkeep usually stays with the owner, because it is their asset.",
         ask = "structural and major repairs kept with the owner, leaving only minor day-to-day repairs to the tenant",
@@ -245,7 +246,7 @@ private val patterns = listOf(
     ),
     Pattern(
         id = "unexpired-liability", topic = "Leaving early", severity = Severity.HIGH,
-        all = listOf(Regex("\\b(?:unexpired|remainder of the term|balance of the term)")),
+        all = listOf(Regex("\\b(?:unexpired|remainder of the term|balance of the term)|\\b(?:liable|responsible)\\b[^.;]{0,40}\\b(?:rest|remainder|balance) of the (?:lease )?term")),
         headline = { "Leaving early still costs you the rest of the term" },
         reason = "That can be many months of rent for a home you have already left.",
         ask = "liability that ends when a new tenant moves in, and never more than two months rent",
@@ -254,7 +255,9 @@ private val patterns = listOf(
         id = "long-notice", topic = "Leaving early", severity = Severity.MEDIUM,
         all = listOf(Regex("\\b(?:notice)"), Regex("\\b(?:tenant|vacat|terminat)")),
         unit = MONTHS, atLeast = 3,
-        near = Regex("\\bnotice"), reach = 40,
+        // Close enough to be the notice period itself. At 40, "renews for a further twelve
+        // months unless the Tenant gives written notice" read as twelve months notice.
+        near = Regex("\\bnotice"), reach = 24,
         headline = { "You must give $it months notice to leave" },
         reason = "One or two months is the common term. Longer than that ties you in.",
         ask = "a notice period of one month, the same for both sides",
@@ -277,7 +280,11 @@ private val patterns = listOf(
     ),
     Pattern(
         id = "unilateral-revision", topic = "Rent going up", severity = Severity.HIGH,
-        all = listOf(Regex("\\b(?:revise the rent|revision of rent|alter the rent)"), Regex("\\b(?:at any time)")),
+        all = listOf(
+            Regex("\\b(?:revise the rent|revision of rent|alter the rent|(?:increase|raise|change|adjust) the rent)"),
+            Regex("\\b(?:at any time)"),
+        ),
+        none = listOf(Regex("\\b(?:may|shall|will|can) ?not\\s+(?:\\w+\\s+){0,2}(?:revise|alter|increase|raise|change|adjust)")),
         headline = { "The landlord can raise the rent at any time" },
         reason = "A rent you cannot plan around is not a fixed rent.",
         ask = "a rent fixed for the whole term, with any rise agreed in writing at renewal",
@@ -326,7 +333,7 @@ private val patterns = listOf(
     ),
     Pattern(
         id = "auto-renewal", topic = "Renewal and notices", severity = Severity.HIGH,
-        all = listOf(Regex("\\b(?:automatically renew|stand renewed|deemed renewed|renewed for a further)")),
+        all = listOf(Regex("\\b(?:automatically (?:renew|be renewed|extend)|renew(?:s|ed)? automatically|stand renewed|deemed renewed|renewed for a further)")),
         headline = { "The agreement renews itself" },
         reason = "Missing the notice window binds you for another full term.",
         ask = "renewal only when both sides agree in writing, with a reminder before the notice window closes",
@@ -404,7 +411,9 @@ private val patterns = listOf(
         id = "as-is", topic = "What you pay for", severity = Severity.MEDIUM,
         all = listOf(
             Regex("\\baccept"),
-            Regex("\\bin (?:its|their) present (?:condition|state)|\\bas.is.? (?:condition|basis)"),
+            // "As is" is ordinary English ("as is required"), so bare it counts only
+            // where the phrase closes: "accepts the apartment as is and", "as is, where is".
+            Regex("\\bin (?:its|their) present (?:condition|state)|\\bas.is.? (?:condition|basis)|\\bas.is\\b(?=[,.;]| and\\b)"),
         ),
         headline = { "You take the home in whatever state it is in" },
         reason = "Accepting the present condition can shift repairs onto you that the law " +
@@ -424,7 +433,7 @@ private val patterns = listOf(
     ),
     Pattern(
         id = "pro-cleaning", topic = "Moving out", severity = Severity.MEDIUM,
-        all = listOf(Regex("\\bprofessional(?:ly)? clean")),
+        all = listOf(Regex("\\bprofessional(?:ly)? (?:\\w+ )?clean")),
         headline = { "Professional cleaning is charged to you on the way out" },
         reason = "Cleaning should be judged against the condition at the start, not bought " +
             "from a firm the landlord picks.",

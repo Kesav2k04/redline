@@ -135,4 +135,50 @@ class AdversarialTest {
             assertTrue("$rule no longer fires on: $clause", rule in rules(clause))
         }
     }
+
+    // --------------------------------------------------------------------- US wording
+
+    @Test
+    fun `a renewal term is not a notice period`() {
+        val c = "This lease renews automatically for a further twelve months unless the Tenant " +
+            "gives written notice at least sixty days before it ends."
+        val found = rules(c)
+        assertTrue("long-notice fired on: $c", "long-notice" !in found)
+        assertTrue("auto-renewal missed: $c", "auto-renewal" in found)
+    }
+
+    @Test
+    fun `a long notice period still reads when the months sit beside the word`() {
+        val c = "The Tenant may end this lease by giving three months' prior written notice."
+        assertEquals("You must give 3 months notice to leave", finding(c, "long-notice")?.headline)
+    }
+
+    @Test
+    fun `US phrasing of the same costly clauses fires`() {
+        val expected = listOf(
+            "The Resident agrees that the security deposit shall not bear interest." to "deposit-no-interest",
+            "Tenant shall be responsible for all maintenance and repairs, including the furnace and water heater." to "tenant-structural-repairs",
+            "Landlord reserves the right to raise the rent at any time on thirty days notice." to "unilateral-revision",
+            "The premises must be professionally steam cleaned before the Tenant vacates." to "pro-cleaning",
+            "Tenant accepts the unit as is, with no promise of repairs by the Landlord." to "as-is",
+            "The term shall renew automatically on the same terms unless either party objects in writing." to "auto-renewal",
+            "If Tenant abandons the premises, Tenant remains responsible for the rent for the remainder of the lease term." to "unexpired-liability",
+        )
+        for ((clause, rule) in expected) {
+            assertTrue("$rule missed: $clause", rule in rules(clause))
+        }
+    }
+
+    @Test
+    fun `the wider US wording does not fire on the clauses that protect the tenant`() {
+        val quiet = listOf(
+            "The Landlord may not increase the rent at any time during the term." to "unilateral-revision",
+            "The Landlord shall be responsible for all repairs to the heating and plumbing, and the Tenant shall report defects promptly." to "tenant-structural-repairs",
+            "The Tenant accepts that parking works as is stated in the building handbook." to "as-is",
+            "The rent stays fixed for the rest of the term, and the Tenant is responsible only for electricity." to "unexpired-liability",
+        )
+        for ((clause, rule) in quiet) {
+            assertTrue("$rule fired on: $clause", rule !in rules(clause))
+        }
+    }
 }
