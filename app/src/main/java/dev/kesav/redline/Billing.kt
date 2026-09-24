@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object Billing {
 
+    /** Renter Pro: every lease, the comparison and the drafts. Attached to the Pro products. */
     const val ENTITLEMENT = "full_report"
 
     private const val TAG = "Billing"
@@ -129,19 +130,25 @@ object Billing {
             .onFailure { Log.w(TAG, "Could not load offerings: ${it.message}") }
     }
 
-    /** Returns null when the buyer cancelled, which is not an error worth showing. */
-    suspend fun purchase(activity: Activity, pkg: Package): String? {
-        if (!configured) return "Purchases are not configured in this build."
+    /** How a purchase ended. A cancel is its own outcome, never an error to show. */
+    sealed interface Outcome {
+        data object Bought : Outcome
+        data object Cancelled : Outcome
+        data class Failed(val message: String) : Outcome
+    }
+
+    suspend fun purchase(activity: Activity, pkg: Package): Outcome {
+        if (!configured) return Outcome.Failed("Purchases are not configured in this build.")
 
         return runCatching {
             val params = PurchaseParams.Builder(activity, pkg).build()
             apply(Purchases.sharedInstance.awaitPurchase(params).customerInfo)
-            null
+            Outcome.Bought
         }.getOrElse { error ->
             if (error is com.revenuecat.purchases.PurchasesTransactionException && error.userCancelled) {
-                null
+                Outcome.Cancelled
             } else {
-                error.message ?: "The purchase did not complete."
+                Outcome.Failed(error.message ?: "The purchase did not complete.")
             }
         }
     }
@@ -168,7 +175,15 @@ object Billing {
         }.getOrElse { it.message ?: "Restore did not complete." }
     }
 
+    /**
+     * Product ids of every one-time purchase on this customer, which is where a lease pass
+     * shows up: it carries no entitlement, because it opens one lease rather than the app.
+     */
+    private val _oneTime = MutableStateFlow<Set<String>>(emptySet())
+    val oneTime: StateFlow<Set<String>> = _oneTime.asStateFlow()
+
     private fun apply(info: CustomerInfo) {
         _unlocked.value = info.entitlements[ENTITLEMENT]?.isActive == true
+        _oneTime.value = info.nonSubscriptionTransactions.map { it.productIdentifier }.toSet()
     }
 }

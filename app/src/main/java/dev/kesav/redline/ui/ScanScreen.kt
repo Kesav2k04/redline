@@ -131,6 +131,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Activity
@@ -165,6 +166,20 @@ fun ScanScreen(
     var showChecks by remember { mutableStateOf(false) }
     var letterFor by remember { mutableStateOf<ScanState.Scanned?>(null) }
     var choosingPlace by remember { mutableStateOf(false) }
+    var paywall by rememberSaveable { mutableStateOf<PaywallReason?>(null) }
+    // Where the marked-up lease is open, and at which clause; -1 is the top of the document.
+    var reading by rememberSaveable { mutableStateOf<Int?>(null) }
+
+    // A purchase that lands closes the paywall behind it: the report opening underneath is the
+    // receipt. The comparison needs Pro, so a pass bought from that tap leaves it open.
+    LaunchedEffect(ui.unlocked, ui.pro) {
+        val done = when (paywall) {
+            PaywallReason.COMPARE -> ui.pro
+            null -> false
+            else -> ui.unlocked
+        }
+        if (done) paywall = null
+    }
 
     // A paywall with no price is an app that started offline. Keep asking, quietly, while
     // it is on screen, so the price turns up when the signal does.
@@ -306,11 +321,18 @@ fun ScanScreen(
                 known = ui.entitlementsKnown,
                 busy = ui.busy,
                 price = ui.offer?.product?.price?.formatted,
-                onUnlock = { activity?.let(viewModel::buy) },
+                onUnlock = { paywall = PaywallReason.REPORT },
                 onRestore = viewModel::restore,
                 onBack = viewModel::back,
                 onShare = { scope.launch { context.startActivity(shareReport(context, state)) } },
                 onLetter = { letterFor = state },
+                pro = ui.pro,
+                fromPrice = ui.offers.firstOrNull()?.price ?: ui.offer?.product?.price?.formatted,
+                onDocument = { focus -> reading = focus ?: -1 },
+                onDraft = {
+                    if (ui.unlocked || !state.sellable) letterFor = state else paywall = PaywallReason.DRAFT
+                },
+                onCompare = { if (ui.pro) viewModel.say("Scan a second lease to compare.") else paywall = PaywallReason.COMPARE },
                 place = ui.place,
                 onPlace = { choosingPlace = true },
                 pitch = ui.pitch,
@@ -333,6 +355,21 @@ fun ScanScreen(
 
         if (showChecks) {
             ChecksSheet(onDismiss = { showChecks = false })
+        }
+        val scanned = ui.state as? ScanState.Scanned
+        if (paywall != null && scanned != null) {
+            PaywallSheet(
+                state = scanned,
+                offers = ui.offers,
+                reason = paywall ?: PaywallReason.REPORT,
+                busy = ui.busy,
+                known = ui.entitlementsKnown,
+                pitch = ui.pitch,
+                onBuy = { plan -> activity?.let { viewModel.buy(it, plan) } },
+                onRestore = viewModel::restore,
+                onRetry = viewModel::retryOffer,
+                onDismiss = { paywall = null },
+            )
         }
         if (choosingPlace) {
             PlaceSheet(
@@ -498,6 +535,11 @@ internal fun Results(
     place: Place? = null,
     onPlace: () -> Unit = {},
     pitch: String? = null,
+    pro: Boolean = unlocked,
+    fromPrice: String? = price,
+    onDocument: (Int?) -> Unit = {},
+    onDraft: () -> Unit = onLetter,
+    onCompare: () -> Unit = {},
 ) {
     // Never offered for text that is not a lease: the exported report opens "Redline
     // read 4 clauses in this lease", and sending that about a recipe puts the app's
@@ -616,6 +658,46 @@ internal fun Results(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { Summary(state, locked = !unlocked && state.sellable, onShareCount = onShareCount) }
+
+            val insight = state.insight
+            if (state.looksLikeLease && state.flaggedClauses > 0) {
+                item(key = "bento-title") { SectionTitle("Where the risk sits", Modifier.entrance(1, settled.value)) }
+                item(key = "bento") {
+                    BentoGrid(
+                        categories = insight.categories,
+                        // A tile opens the lease at the first clause in its category, marked up.
+                        onOpen = { category ->
+                            val first = state.groups.firstOrNull { g ->
+                                g.findings.any { dev.kesav.redline.Insights.categoryOf(it.ruleId) == category }
+                            }
+                            onDocument(first?.clause?.index)
+                        },
+                        modifier = Modifier.entrance(2, settled.value),
+                    )
+                }
+                insight.exposure?.takeIf { it.items.isNotEmpty() }?.let { exposure ->
+                    item(key = "money") { MoneyCard(exposure, locked = locked, modifier = Modifier.entrance(3, settled.value)) }
+                }
+                if (place != null && insight.void.isNotEmpty()) {
+                    item(key = "void") { VoidCard(place, insight.void, locked = locked, modifier = Modifier.entrance(4, settled.value)) }
+                }
+                item(key = "tools") {
+                    ToolsRow(
+                        onDocument = { onDocument(null) },
+                        onDraft = onDraft,
+                        onCompare = onCompare,
+                        draftLocked = locked,
+                        compareLocked = !pro,
+                        modifier = Modifier.entrance(5, settled.value),
+                    )
+                }
+                item(key = "clauses-title") {
+                    SectionTitle(
+                        "The clauses",
+                        detail = if (state.flaggedClauses == 1) "1 flagged" else "${state.flaggedClauses} flagged, worst first",
+                    )
+                }
+            }
 
             // While locked, under the free card, where its ask has just said "the local legal
             // limit" and the reader wants the number. Above it, the row pushed that card down.
@@ -765,8 +847,9 @@ internal fun Results(
                         // The entitlement is lifetime. Without saying so, the price read as
                         // the cost of this one lease.
                         text = when {
-                            large -> "Pay once, for every lease."
-                            else -> pitch ?: "Pay once, for every lease you scan: each clause, what to ask for, and a letter to your landlord."
+                            large -> fromPrice?.let { "From $it, paid once." } ?: "Paid once."
+                            fromPrice != null -> "From $fromPrice, paid once: each clause, what it costs you, and a reply to send."
+                            else -> "Paid once: each clause, what it costs you, and a reply to send."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -812,7 +895,7 @@ internal fun Results(
                         // put two units on one screen and invited a subtraction that
                         // has no sensible answer, at the exact moment someone decides
                         // whether to trust the app with money.
-                        Text(unlockLabel(state.groups.size - 1, price), style = MaterialTheme.typography.labelLarge)
+                        Text(unlockLabel(state.groups.size - 1, null), style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 TextButton(
@@ -902,16 +985,19 @@ private fun BottomBar(lifted: Boolean, content: @Composable () -> Unit) {
 }
 
 /**
- * The count, set as large as anything in the app, with the split under it.
+ * The verdict: the risk score as a dial, then the count it comes from, the split by severity,
+ * and the money the flagged clauses write down.
  *
- * The number counts up from zero the first time it is drawn. It is the moment the reader
- * learns what the lease costs them, and a figure that arrives already sitting there reads
- * as a label rather than as a result.
+ * The dial is what a reader sees in the first second, and it answers the only question they
+ * arrived with (is this lease bad) before they read a word. The count under it is the evidence
+ * for the dial, and it climbs in step with the sweep, because a figure that arrives already
+ * sitting there reads as a label rather than as a result.
  */
 @Composable
 private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () -> Unit) {
     val hero = LocalHero.current
     val flagged = state.flaggedClauses
+    val insight = state.insight
     val heading = when {
         flagged == 0 -> "Nothing matched"
         !state.looksLikeLease -> "This does not read like a lease"
@@ -919,7 +1005,6 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
     }
 
     val moving = animationsEnabled()
-    val haptics = LocalHapticFeedback.current
     val shown = remember(state) { Animatable(if (moving) 0f else flagged.toFloat()) }
     val legend = remember(state) { Animatable(if (moving) 0f else 1f) }
     val visibility = LocalVisibilityScope.current
@@ -934,31 +1019,37 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
         visibility?.let { v ->
             withTimeoutOrNull(900) { snapshotFlow { v.transition.isRunning }.first { !it } }
         }
-        // Longer for a bigger number so 3 does not crawl and 30 does not blur, slowing onto
-        // the last digit so it lands with weight. A light tick per number and one firm
-        // stamp at the end, like a mechanical counter.
-        var last = 0
         shown.animateTo(
             flagged.toFloat(),
             tween(durationMillis = (520 + 30 * flagged).coerceAtMost(900), easing = RedlineMotion.Decelerate),
-        ) {
-            val v = value.toInt()
-            if (v != last) {
-                last = v
-                if (flagged <= 30) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
-            }
-        }
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        )
         legend.animateTo(1f, tween(150))
     }
 
+    val glow = risk.ofScore(insight.score)
     Surface(
         color = hero.container,
         contentColor = hero.content,
         shape = MaterialTheme.shapes.extraLarge,
         modifier = Modifier.verdict().fillMaxWidth(),
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(
+            modifier = Modifier
+                // A soft glow in the tier's colour behind the dial, so the panel reads as lit
+                // from the score rather than as a black box with a chart in it.
+                .drawBehind {
+                    if (flagged > 0 && state.looksLikeLease) {
+                        val c = Offset(size.width / 2f, size.width * 0.36f)
+                        drawCircle(
+                            brush = Brush.radialGradient(listOf(glow.copy(alpha = 0.22f), Color.Transparent), center = c, radius = size.width * 0.6f),
+                            radius = size.width * 0.6f,
+                            center = c,
+                        )
+                    }
+                }
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
             if (flagged == 0 || !state.looksLikeLease) {
                 Text(
                     text = heading,
@@ -975,11 +1066,20 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                     color = hero.muted,
                 )
             } else {
+                RiskGauge(
+                    score = insight.score,
+                    tier = insight.tier,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .widthIn(max = 260.dp)
+                        .fillMaxWidth(0.78f),
+                )
+
                 Column(Modifier.clearAndSetSemantics { contentDescription = heading; heading() }) {
                     Row(verticalAlignment = Alignment.Bottom) {
                         // Reserved at the final number's width, so " of 16 clauses" holds
                         // still while the digits run instead of sliding as they change.
-                        val countStyle = MaterialTheme.typography.displayLarge
+                        val countStyle = FigureStyle.copy(fontSize = 40.sp, lineHeight = 40.sp)
                         val measurer = rememberTextMeasurer()
                         val finalWidth = with(LocalDensity.current) {
                             measurer.measure(flagged.toString(), countStyle).size.width.toDp()
@@ -996,7 +1096,7 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                         Text(
                             text = " of ${state.clauseCount} clauses",
                             style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.padding(bottom = 8.dp),
+                            modifier = Modifier.padding(bottom = 4.dp),
                         )
                     }
                     Text("could cost you money", style = MaterialTheme.typography.titleLarge)
@@ -1010,6 +1110,10 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                     filled = { if (flagged == 0) 1f else shown.value / flagged },
                     legendAlpha = { legend.value },
                 )
+
+                insight.exposure?.takeIf { it.total > 0 }?.let { exposure ->
+                    ExposureLine(exposure, alpha = { legend.value })
+                }
 
                 // The split is already in the legend, so this line says what happens
                 // next instead of repeating it.
@@ -1039,12 +1143,48 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Icon(RedlineIcons.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Text("Share the count, not the lease", style = MaterialTheme.typography.labelLarge)
+                            Text("Share the score, not the lease", style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * The money the flagged clauses put in writing, as one figure on the dark panel. Every rupee
+ * or dollar in it is a number printed in the lease itself; the breakdown card below says which.
+ */
+@Composable
+private fun ExposureLine(exposure: dev.kesav.redline.Exposure, alpha: () -> Float) {
+    val hero = LocalHero.current
+    val spoken = "${money(exposure.symbol, exposure.total)} written into the flagged clauses"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { this.alpha = alpha() }
+            .clip(MaterialTheme.shapes.medium)
+            .background(hero.content.copy(alpha = 0.07f))
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .clearAndSetSemantics { contentDescription = spoken },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        IconBadge(RedlineIcons.Wallet, tint = hero.accent, container = hero.accent.copy(alpha = 0.16f), size = 40.dp)
+        Column(Modifier.weight(1f)) {
+            Eyebrow("Money at stake", color = hero.muted)
+            Text(
+                money(exposure.symbol, exposure.total),
+                style = FigureStyle.copy(fontSize = 26.sp, lineHeight = 30.sp),
+                color = hero.content,
+            )
+        }
+        Text(
+            text = if (exposure.items.size == 1) "in 1 clause" else "in ${exposure.items.size} clauses",
+            style = MaterialTheme.typography.labelMedium,
+            color = hero.muted,
+        )
     }
 }
 

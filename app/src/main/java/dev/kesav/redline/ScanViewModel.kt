@@ -48,6 +48,8 @@ sealed interface ScanState {
          * money for a scan of a recipe is not a thing this app should be able to do.
          */
         val looksLikeLease: Boolean = true,
+        /** Where the home is, as it was when this scan ran. */
+        val place: Place? = null,
     ) : ScanState {
         /**
          * The findings, one entry per clause, in the order the findings were sorted.
@@ -89,13 +91,23 @@ sealed interface ScanState {
             .map { it.clause.index }
             .distinct()
             .size
+
+        /** The score, the four categories, the money and the void clauses, computed once. */
+        val insight: Insight = Insights.of(findings, clauseCount, place)
     }
 }
 
 data class ScanUi(
     val text: String = "",
     val state: ScanState = ScanState.Editing,
+    /** Whether the report on screen is open: Pro, or a pass bought for this lease. */
     val unlocked: Boolean = false,
+    /** Renter Pro: every lease on this phone, and the comparison. */
+    val pro: Boolean = false,
+    /** Fingerprints of the leases a pass was bought for. */
+    val passes: Set<String> = emptySet(),
+    /** What the paywall can sell, pass first, from the current offering. */
+    val offers: List<Offer> = emptyList(),
     /** False until the first entitlement read lands. Distinct from `unlocked == false`. */
     val entitlementsKnown: Boolean = false,
     val busy: Boolean = false,
@@ -149,6 +161,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
             source = saved[KEY_SOURCE],
             photoPages = saved[KEY_PAGES] ?: 0,
             place = Place.fromName(prefs().getString(KEY_PLACE, null)),
+            passes = prefs().getStringSet(KEY_PASSES, emptySet()).orEmpty().toSet(),
         )
     )
     val ui: StateFlow<ScanUi> = _ui.asStateFlow()
@@ -177,7 +190,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
             Billing.loadOffering()
         }
         viewModelScope.launch {
-            Billing.unlocked.collect { unlocked -> _ui.update { it.copy(unlocked = unlocked) } }
+            Billing.unlocked.collect { pro -> _ui.update { it.copy(pro = pro).withAccess() } }
         }
         viewModelScope.launch {
             Billing.known.collect { known -> _ui.update { it.copy(entitlementsKnown = known) } }
@@ -199,7 +212,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 }
 
                 val pitch = offering?.getMetadataString(PITCH_KEY, "")?.takeIf { it.isNotBlank() }
-                _ui.update { it.copy(offer = offer, pitch = pitch) }
+                _ui.update { it.copy(offer = offer, pitch = pitch, offers = offersFrom(offering)) }
             }
         }
     }
@@ -309,9 +322,9 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
             val scanned = withContext(Dispatchers.Default) {
                 val clauses = ClauseSplitter.split(text)
                 val findings = Scanner.ranked(clauses, _ui.value.place)
-                ScanState.Scanned(clauses.size, findings, LeaseCheck.looksLikeLease(text))
+                ScanState.Scanned(clauses.size, findings, LeaseCheck.looksLikeLease(text), _ui.value.place)
             }
-            _ui.update { it.copy(state = scanned) }
+            _ui.update { it.copy(state = scanned).withAccess() }
         }
     }
 
@@ -332,25 +345,39 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         _ui.update { it.copy(state = ScanState.Editing) }
     }
 
-    fun buy(activity: Activity) {
+    fun buy(activity: Activity, plan: Plan? = null) {
         viewModelScope.launch {
             _ui.update { it.copy(busy = true, message = null) }
             // The app says it works offline, and it does, which means it can start with
             // no offering at all. The offering was only ever fetched at launch, so a
             // reader who scanned on the metro and then got signal was told no offering
             // existed. Ask again at the moment it matters.
-            val pkg = _ui.value.offer ?: run {
-                Billing.loadOffering()
-                offerFrom(Billing.offering.value)
-            }
-            if (pkg == null) {
+            if (_ui.value.offers.isEmpty()) Billing.loadOffering()
+            val offers = _ui.value.offers.ifEmpty { offersFrom(Billing.offering.value) }
+            val chosen = offers.firstOrNull { it.plan == plan }
+                ?: offers.firstOrNull { it.plan == Plan.PRO_LIFETIME }
+                ?: offers.firstOrNull()
+            if (chosen == null) {
                 _ui.update {
                     it.copy(busy = false, message = "The store could not be reached. Check the connection and try again.")
                 }
                 return@launch
             }
-            val error = Billing.purchase(activity, pkg)
-            _ui.update { it.copy(busy = false, message = error) }
+            // The lease is fingerprinted before the purchase sheet goes up, so a pass opens
+            // the lease that was on screen when the reader chose to pay for it.
+            val lease = leaseFingerprint(_ui.value.text)
+            when (val outcome = Billing.purchase(activity, chosen.pkg)) {
+                Billing.Outcome.Bought -> {
+                    if (chosen.plan == Plan.PASS) {
+                        val passes = _ui.value.passes + lease
+                        prefs().edit().putStringSet(KEY_PASSES, passes).apply()
+                        _ui.update { it.copy(passes = passes) }
+                    }
+                    _ui.update { it.copy(busy = false).withAccess() }
+                }
+                Billing.Outcome.Cancelled -> _ui.update { it.copy(busy = false) }
+                is Billing.Outcome.Failed -> _ui.update { it.copy(busy = false, message = outcome.message) }
+            }
         }
     }
 
@@ -364,6 +391,10 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
     }
 
     private var offerRetry: kotlinx.coroutines.Job? = null
+
+    /** Pro opens everything; a pass opens only the lease it was bought for. */
+    private fun ScanUi.withAccess(): ScanUi =
+        copy(unlocked = pro || (text.isNotBlank() && leaseFingerprint(text) in passes))
 
     private fun offerFrom(offering: com.revenuecat.purchases.Offering?): Package? {
         val packages = offering?.availablePackages.orEmpty()
@@ -393,6 +424,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         const val KEY_PLACE = "place"
         const val KEY_SOURCE = "source"
         const val KEY_PAGES = "photoPages"
+        const val KEY_PASSES = "passes"
         const val MAX_SAVED_CHARS = 100_000
     }
 }
