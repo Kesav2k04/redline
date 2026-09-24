@@ -113,6 +113,8 @@ data class ScanUi(
     val offers: List<Offer> = emptyList(),
     /** The monthly rent the reader typed, for leases that state rent only in months. */
     val rent: Long? = null,
+    /** Leases scanned on this phone, newest first, for the comparison. */
+    val saved: List<SavedLease> = emptyList(),
     /** False until the first entitlement read lands. Distinct from `unlocked == false`. */
     val entitlementsKnown: Boolean = false,
     val busy: Boolean = false,
@@ -186,6 +188,10 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                     saved[KEY_SOURCE] = source
                     saved[KEY_PAGES] = pages
                 }
+        }
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) { LeaseStore.all(getApplication()) }
+            _ui.update { it.copy(saved = saved) }
         }
         // Reading the entitlement is a network call, so it lands after the first frame.
         // The screen waits on `entitlementsKnown` rather than assuming that a false
@@ -335,6 +341,12 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 ScanState.Scanned(clauses.size, findings, LeaseCheck.looksLikeLease(text), _ui.value.place, clauses)
             }
             _ui.update { it.copy(state = scanned).withAccess() }
+            // Every lease that reads as one is kept on the phone for comparing later.
+            if (scanned.looksLikeLease && text.isNotBlank()) {
+                val title = LeaseStore.titleFor(text, _ui.value.source)
+                val saved = withContext(Dispatchers.IO) { LeaseStore.save(getApplication(), text, title, _ui.value.place) }
+                _ui.update { it.copy(saved = saved) }
+            }
         }
     }
 

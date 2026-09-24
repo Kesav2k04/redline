@@ -172,6 +172,7 @@ fun ScanScreen(
     var paywall by rememberSaveable { mutableStateOf<PaywallReason?>(null) }
     // Where the marked-up lease is open, and at which clause; -1 is the top of the document.
     var reading by rememberSaveable { mutableStateOf<Int?>(null) }
+    var comparing by rememberSaveable { mutableStateOf(false) }
 
     // A purchase that lands closes the paywall behind it: the report opening underneath is the
     // receipt. The comparison needs Pro, so a pass bought from that tap leaves it open.
@@ -181,7 +182,10 @@ fun ScanScreen(
             null -> false
             else -> ui.unlocked
         }
-        if (done) paywall = null
+        if (done) {
+            if (paywall == PaywallReason.COMPARE) comparing = true
+            paywall = null
+        }
     }
 
     // A paywall with no price is an app that started offline. Keep asking, quietly, while
@@ -319,7 +323,7 @@ fun ScanScreen(
                 onDraft = {
                     if (ui.unlocked || !state.sellable) letterFor = state else paywall = PaywallReason.DRAFT
                 },
-                onCompare = { if (ui.pro) viewModel.say("Scan a second lease to compare.") else paywall = PaywallReason.COMPARE },
+                onCompare = { if (ui.pro) comparing = true else paywall = PaywallReason.COMPARE },
                 place = ui.place,
                 onPlace = { choosingPlace = true },
                 pitch = ui.pitch,
@@ -371,6 +375,19 @@ fun ScanScreen(
         letterFor?.let { scanned ->
             DraftSheet(state = scanned, onDismiss = { letterFor = null })
         }
+    }
+    val compared = ui.state as? ScanState.Scanned
+    if (comparing && compared != null) {
+        CompareScreen(
+            current = compared,
+            currentId = remember(ui.text) { dev.kesav.redline.leaseFingerprint(ui.text) },
+            saved = ui.saved,
+            onBack = { comparing = false },
+            onScanAnother = {
+                comparing = false
+                viewModel.edit("")
+            },
+        )
     }
     if (scanning) {
         CameraScan(
