@@ -190,7 +190,7 @@ internal fun PaywallSheet(
                                 Plan.PRO_MONTHLY -> offer.trial?.let { "$it, then monthly" } ?: "Monthly, cancel any time"
                                 Plan.PASS -> ""
                             },
-                            badge = if (passOffer != null) "Most leases" else null,
+                            badge = if (passOffer != null) "Best value" else null,
                             selected = chosen == offer.plan,
                             onSelect = {
                                 haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)

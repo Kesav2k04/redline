@@ -429,8 +429,14 @@ private fun BentoTile(
             Meter(score.risk, tint, delayIndex = index)
         } else {
             IconBadge(score.category.icon, tint, size = if (tall) 48.dp else 40.dp)
-            Spacer(Modifier.height(if (tall) Space.xl else Space.m))
-            if (tall) Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(if (tall) Space.l else Space.m))
+            if (tall) {
+                // The worst category gets its risk as a ring, the one tile with room to draw it.
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    RiskRing(score.risk, tint, Modifier.size(104.dp))
+                }
+                Spacer(Modifier.height(Space.l))
+            }
             TileFigure(score, tint, large = tall)
             Spacer(Modifier.height(Space.xs))
             Text(score.category.label, style = MaterialTheme.typography.titleSmall)
@@ -458,6 +464,31 @@ private fun TileFigure(score: CategoryScore, tint: Color, large: Boolean = false
             modifier = Modifier.padding(bottom = if (large) 6.dp else 3.dp),
             textAlign = TextAlign.Start,
         )
+    }
+}
+
+/** A category's risk, 0 to 100, as a ring that fills on a spring, with the number inside. */
+@Composable
+internal fun RiskRing(value: Int, color: Color, modifier: Modifier = Modifier) {
+    val animate = animationsEnabled()
+    val fill = remember { Animatable(if (animate) 0f else value / 100f) }
+    LaunchedEffect(value) {
+        if (animate) kotlinx.coroutines.delay(160)
+        fill.animateTo(value / 100f, if (animate) RedlineMotion.spatialExpressive() else androidx.compose.animation.core.snap())
+    }
+    val track = MaterialTheme.colorScheme.outlineVariant
+    Box(modifier.clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.minDimension * 0.11f
+            val inset = w / 2f
+            val arc = Size(size.width - w, size.height - w)
+            drawArc(track, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(w))
+            drawArc(color, -90f, 360f * fill.value, false, Offset(inset, inset), arc, style = Stroke(w, cap = StrokeCap.Round))
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text((fill.value * 100).roundToInt().toString(), style = FigureStyle.copy(fontSize = 26.sp, lineHeight = 28.sp), color = color)
+            Text("RISK", style = EyebrowStyle.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
