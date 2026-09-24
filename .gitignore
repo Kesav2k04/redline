@@ -17,3 +17,4 @@ app/src/main/assets/*.task
 eval/models/
 .venv/
 Python/
+.kotlin/

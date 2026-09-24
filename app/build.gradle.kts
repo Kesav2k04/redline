@@ -11,6 +11,9 @@ val localProperties = Properties().apply {
 }
 
 android {
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
     namespace = "dev.kesav.redline"
     compileSdk = 36
 
@@ -124,4 +127,18 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
+
+    // Screens rendered on the JVM, so a layout can be checked without a device. Test-only:
+    // none of this reaches the APK. Images are written only with -Pshots.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+tasks.withType<Test>().configureEach {
+    if (project.hasProperty("shots")) systemProperty("roborazzi.test.record", "true")
 }
