@@ -118,6 +118,12 @@ data class ScanUi(
     val photoPages: Int = 0,
     /** Where the home is, if the reader has said. Null keeps the general wording. */
     val place: Place? = null,
+    /**
+     * The line above the price, from the offering's `paywall_line` metadata when the
+     * dashboard sets one, so the pitch can change without shipping an APK. Null keeps the
+     * line written in the app.
+     */
+    val pitch: String? = null,
 )
 
 /**
@@ -192,7 +198,8 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                     )
                 }
 
-                _ui.update { it.copy(offer = offer) }
+                val pitch = offering?.getMetadataString(PITCH_KEY, "")?.takeIf { it.isNotBlank() }
+                _ui.update { it.copy(offer = offer, pitch = pitch) }
             }
         }
     }
@@ -382,6 +389,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
     private companion object {
         const val KEY_TEXT = "text"
         const val PREFS = "redline"
+        const val PITCH_KEY = "paywall_line"
         const val KEY_PLACE = "place"
         const val KEY_SOURCE = "source"
         const val KEY_PAGES = "photoPages"

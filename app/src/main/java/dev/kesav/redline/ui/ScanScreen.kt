@@ -313,6 +313,7 @@ fun ScanScreen(
                 onLetter = { letterFor = state },
                 place = ui.place,
                 onPlace = { choosingPlace = true },
+                pitch = ui.pitch,
                 onShareCount = { scope.launch { context.startActivity(shareCardIntent(context, state)) } },
                 onChecks = { showChecks = true },
                 modifier = content.graphicsLayer {
@@ -496,6 +497,7 @@ internal fun Results(
     modifier: Modifier = Modifier,
     place: Place? = null,
     onPlace: () -> Unit = {},
+    pitch: String? = null,
 ) {
     // Never offered for text that is not a lease: the exported report opens "Redline
     // read 4 clauses in this lease", and sending that about a recipe puts the app's
@@ -758,7 +760,7 @@ internal fun Results(
                     Text(
                         // The entitlement is lifetime. Without saying so, the price read as
                         // the cost of this one lease.
-                        text = "Pay once, for every lease you scan: each clause, what to ask for, and a letter to your landlord.",
+                        text = pitch ?: "Pay once, for every lease you scan: each clause, what to ask for, and a letter to your landlord.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

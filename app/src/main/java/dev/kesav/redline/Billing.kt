@@ -93,8 +93,8 @@ object Billing {
      *
      * `ANDROID_ID` is the only value with the right lifetime: it is scoped to the signing
      * key, it needs no permission, and it outlives the app's own storage. It is hashed
-     * before it goes anywhere, so what reaches RevenueCat is stable without being a
-     * device identifier. Returning null hands the SDK back its anonymous behaviour, which
+     * with a salt before it goes anywhere, so what reaches RevenueCat is a stable hash,
+     * never the raw ID. Returning null hands the SDK back its anonymous behaviour, which
      * costs restore but never crashes.
      */
     internal fun purchaseId(raw: String?): String? {
