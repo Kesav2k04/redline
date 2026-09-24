@@ -103,6 +103,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.semantics.onClick
+import kotlinx.coroutines.delay
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -378,6 +383,33 @@ private fun Results(
     val moving = animationsEnabled()
     val nudge = remember { Animatable(1f) }
     var hint by remember { mutableStateOf("") }
+
+    // The reveal plays only for a purchase made in this session: a reader who paid last
+    // week, or whose entitlement lands a moment after the screen, sees the report open
+    // without ceremony.
+    var buying by remember { mutableStateOf(false) }
+    LaunchedEffect(busy) { if (busy) buying = true }
+    val revealing = buying && unlocked
+    val density = LocalDensity.current
+    LaunchedEffect(unlocked) {
+        if (unlocked && buying) {
+            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+            val more = (state.groups.size - 1).coerceAtLeast(0)
+            hint = if (more == 1) "Report open. 1 more clause." else "Report open. $more more clauses."
+            delay(120)
+            val firstNew = if (state.looksLikeLease) 2 else 3
+            if (moving) {
+                listState.animateScrollToItem(firstNew, -with(density) { 96.dp.roundToPx() })
+            }
+        }
+    }
+
+    // Cards in the first screenful rise in once; anything scrolled to later just appears.
+    val settled = remember(state) { mutableStateOf(!moving) }
+    LaunchedEffect(state) {
+        delay(1200)
+        settled.value = true
+    }
     val onNudge: () -> Unit = {
         haptic.performHapticFeedback(HapticFeedbackType.Reject)
         // Alternating the final character makes a repeated tap announce again.
@@ -429,14 +461,38 @@ private fun Results(
                 // rest are one list of subjects rather than a column of black bars: two
                 // of six readers took the bars for a broken app and tapped them.
                 state.groups.firstOrNull()?.let { first ->
-                    item(key = "clause-${first.clause.index}") { ClauseCard(first) }
+                    item(key = "clause-${first.clause.index}") {
+                        ClauseCard(first, Modifier.entrance(0, settled.value).animateItem())
+                    }
                 }
                 val rest = state.groups.drop(1)
                 if (rest.isNotEmpty()) {
-                    item(key = "locked") { LockedIndex(rest, onTap = onNudge) }
+                    item(key = "locked") {
+                        LockedIndex(
+                            rest,
+                            onTap = onNudge,
+                            modifier = Modifier
+                                .entrance(1, settled.value)
+                                .animateItem(fadeOutSpec = motion(tween(150))),
+                        )
+                    }
                 }
             } else {
-                items(state.groups, key = { "clause-${it.clause.index}" }) { group -> ClauseCard(group) }
+                itemsIndexed(state.groups, key = { _, g -> "clause-${g.clause.index}" }) { i, group ->
+                    // After a purchase the index gives way to the clauses it named, each
+                    // growing in a beat after the one above it.
+                    val stagger = minOf(i, RedlineMotion.STAGGER_CAP) * RedlineMotion.STAGGER_MS
+                    ClauseCard(
+                        group,
+                        modifier = Modifier
+                            .entrance(i, settled.value)
+                            .animateItem(
+                                fadeInSpec = motion(tween(240, delayMillis = stagger)),
+                                placementSpec = motion(RedlineMotion.spatial()),
+                            ),
+                        drawMark = revealing,
+                    )
+                }
             }
 
             // At the foot rather than in the pinned bar. Someone who has scrolled past
@@ -504,7 +560,14 @@ private fun Results(
         // and free in that case, so there is nothing behind a paywall to sell, and a
         // paywall over a scan of somebody's recipe is the single worst thing this app
         // could be caught doing.
-        if (locked) {
+        val barIn = motion(tween<Float>(220, delayMillis = 90))
+        val barOut = motion(tween<Float>(150))
+        AnimatedContent(
+            targetState = locked,
+            transitionSpec = { fadeIn(barIn) togetherWith fadeOut(barOut) },
+            label = "bottomBar",
+        ) { offer ->
+        if (offer) {
             BottomBar(lifted) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -605,6 +668,7 @@ private fun Results(
                 }
             }
         }
+        }
     }
 }
 
@@ -658,9 +722,31 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
     }
 
     val moving = animationsEnabled()
+    val haptics = LocalHapticFeedback.current
     val shown = remember(state) { Animatable(if (moving) 0f else flagged.toFloat()) }
+    val legend = remember(state) { Animatable(if (moving) 0f else 1f) }
     LaunchedEffect(state) {
-        if (moving) shown.animateTo(flagged.toFloat(), tween(durationMillis = 700))
+        if (!moving || flagged == 0) {
+            shown.snapTo(flagged.toFloat())
+            legend.snapTo(1f)
+            return@LaunchedEffect
+        }
+        // Longer for a bigger number so 3 does not crawl and 30 does not blur, slowing onto
+        // the last digit so it lands with weight. A light tick per number and one firm
+        // stamp at the end, like a mechanical counter.
+        var last = 0
+        shown.animateTo(
+            flagged.toFloat(),
+            tween(durationMillis = (520 + 30 * flagged).coerceAtMost(900), easing = RedlineMotion.Decelerate),
+        ) {
+            val v = value.toInt()
+            if (v != last) {
+                last = v
+                if (flagged <= 30) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+            }
+        }
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        legend.animateTo(1f, tween(150))
     }
 
     Surface(
@@ -688,11 +774,22 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
             } else {
                 Column(Modifier.clearAndSetSemantics { contentDescription = heading; heading() }) {
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            text = shown.value.roundToInt().toString(),
-                            style = MaterialTheme.typography.displayLarge,
-                            color = hero.accent,
-                        )
+                        // Reserved at the final number's width, so " of 16 clauses" holds
+                        // still while the digits run instead of sliding as they change.
+                        val countStyle = MaterialTheme.typography.displayLarge
+                        val measurer = rememberTextMeasurer()
+                        val finalWidth = with(LocalDensity.current) {
+                            measurer.measure(flagged.toString(), countStyle).size.width.toDp()
+                        }
+                        Box(Modifier.width(finalWidth), contentAlignment = Alignment.BottomStart) {
+                            Text(
+                                text = shown.value.toInt().toString(),
+                                style = countStyle,
+                                color = hero.accent,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
                         Text(
                             text = " of ${state.clauseCount} clauses",
                             style = MaterialTheme.typography.titleLarge,
@@ -707,6 +804,8 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                     other = flagged - state.highClauses,
                     clear = (state.clauseCount - flagged).coerceAtLeast(0),
                     spoken = severitySplit(state.highClauses, flagged),
+                    filled = { if (flagged == 0) 1f else shown.value / flagged },
+                    legendAlpha = { legend.value },
                 )
 
                 // The split is already in the legend, so this line says what happens
@@ -748,7 +847,14 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
 
 /** Serious, worth checking and clear, as one bar the width of the card. */
 @Composable
-private fun SeverityBar(serious: Int, other: Int, clear: Int, spoken: String) {
+private fun SeverityBar(
+    serious: Int,
+    other: Int,
+    clear: Int,
+    spoken: String,
+    filled: () -> Float = { 1f },
+    legendAlpha: () -> Float = { 1f },
+) {
     val hero = LocalHero.current
     val amber = MaterialTheme.colorScheme.tertiary
     val total = (serious + other + clear).coerceAtLeast(1)
@@ -758,14 +864,26 @@ private fun SeverityBar(serious: Int, other: Int, clear: Int, spoken: String) {
         modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
+            // Fills left to right in step with the count above it.
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .drawWithContent {
+                    clipRect(right = size.width * filled().coerceIn(0f, 1f)) {
+                        this@drawWithContent.drawContent()
+                    }
+                },
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             if (serious > 0) Box(Modifier.weight(serious.toFloat() / total).fillMaxHeight().background(hero.accent))
             if (other > 0) Box(Modifier.weight(other.toFloat() / total).fillMaxHeight().background(amber))
             if (clear > 0) Box(Modifier.weight(clear.toFloat() / total).fillMaxHeight().background(hero.content.copy(alpha = 0.18f)))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.graphicsLayer { alpha = legendAlpha() },
+        ) {
             Legend(hero.accent, "$serious serious")
             if (other > 0) Legend(amber, "$other worth checking")
             Legend(hero.content.copy(alpha = 0.35f), "$clear clear")
@@ -855,7 +973,7 @@ private fun severityWord(severity: Severity): String = when (severity) {
 }
 
 @Composable
-private fun ClauseCard(group: ClauseGroup) {
+private fun ClauseCard(group: ClauseGroup, modifier: Modifier = Modifier, drawMark: Boolean = false) {
     val count = group.findings.size
     val problems = if (count == 1) "1 problem" else "$count problems"
     val scheme = MaterialTheme.colorScheme
@@ -874,10 +992,18 @@ private fun ClauseCard(group: ClauseGroup) {
         append("The clause reads: ${group.clause.text}")
     }
 
+    // On a card opened by the purchase, the margin mark draws downward: the pen marking
+    // the clause as it opens.
+    val moving = animationsEnabled()
+    val markDrawn = remember { Animatable(if (drawMark && moving) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (markDrawn.value < 1f) markDrawn.animateTo(1f, tween(280, delayMillis = 120, easing = RedlineMotion.Decelerate))
+    }
+
     Surface(
         color = scheme.surfaceContainerLowest,
         shape = MaterialTheme.shapes.large,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clearAndSetSemantics { contentDescription = spoken },
     ) {
@@ -908,7 +1034,7 @@ private fun ClauseCard(group: ClauseGroup) {
                         drawRoundRect(
                             color = mark,
                             topLeft = Offset(0f, 2.dp.toPx()),
-                            size = Size(w, size.height - 4.dp.toPx()),
+                            size = Size(w, (size.height - 4.dp.toPx()) * markDrawn.value),
                             cornerRadius = CornerRadius(w / 2),
                         )
                     }
@@ -929,6 +1055,30 @@ private fun ClauseCard(group: ClauseGroup) {
             // rather than as thoroughness.
             Quote(group.clause.text, Modifier.padding(top = 4.dp))
         }
+    }
+}
+
+/**
+ * A card in the first screenful of a report rises 24dp and fades in, a beat after the one
+ * above it. Anything composed after the report has settled appears without motion, because
+ * a list that re-animates on every scroll is noise.
+ */
+@Composable
+private fun Modifier.entrance(index: Int, settled: Boolean): Modifier {
+    val moving = animationsEnabled()
+    val play = remember { moving && !settled }
+    val rise = remember { Animatable(if (play) 24f else 0f) }
+    val fade = remember { Animatable(if (play) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (play) {
+            delay((minOf(index, RedlineMotion.STAGGER_CAP) * RedlineMotion.STAGGER_MS).toLong())
+            launch { rise.animateTo(0f, RedlineMotion.spatial()) }
+            fade.animateTo(1f, RedlineMotion.effects())
+        }
+    }
+    return graphicsLayer {
+        translationY = rise.value * density
+        alpha = fade.value
     }
 }
 
