@@ -79,6 +79,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import dev.kesav.redline.SavedLease
 import dev.kesav.redline.Scanner
 import kotlin.math.roundToInt
 
@@ -107,6 +108,9 @@ internal fun Editor(
     onPhoto: (() -> Unit)?,
     modifier: Modifier = Modifier,
     readingProgress: Float? = null,
+    saved: List<SavedLease> = emptyList(),
+    onOpenSaved: (SavedLease) -> Unit = {},
+    onForget: (String) -> Unit = {},
 ) {
     // Set by the paste tile when the clipboard is empty, so there is a field to type or
     // paste into. Saved, so rotating the phone does not throw the reader back a step.
@@ -140,6 +144,9 @@ internal fun Editor(
             },
             onSample = onSample,
             onChecks = onChecks,
+            saved = saved,
+            onOpenSaved = onOpenSaved,
+            onForget = onForget,
             modifier = modifier,
         )
     }
@@ -160,6 +167,9 @@ private fun Start(
     onPaste: (String?) -> Unit,
     onSample: () -> Unit,
     onChecks: () -> Unit,
+    saved: List<SavedLease>,
+    onOpenSaved: (SavedLease) -> Unit,
+    onForget: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -185,6 +195,13 @@ private fun Start(
                 .semantics { heading() },
         )
         WaysIn(onOpen = onOpen, onPhoto = onPhoto, onPaste = { onPaste(clipboard.getText()?.text) })
+
+        // Leases already scanned on this phone, straight under the ways in: reopening one is
+        // the other way a returning reader starts.
+        if (saved.isNotEmpty()) {
+            Spacer(Modifier.height(Space.xxl))
+            RecentScans(saved = saved, onOpen = onOpenSaved, onForget = onForget)
+        }
 
         // Space between groups is larger than space inside them, so the screen reads as
         // promise, ways in, what it checks, then the sample, and not as one long list.
