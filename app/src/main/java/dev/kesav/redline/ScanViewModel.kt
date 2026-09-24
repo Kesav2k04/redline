@@ -222,6 +222,11 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         if (_ui.value.reading != null) return after()
         viewModelScope.launch {
             _ui.update { it.copy(reading = "Opening the file", readingProgress = null, message = null) }
+            // A whole PDF read from its own text layer has nothing to proofread, and
+            // parking the reader in front of fourteen pages of it before the verdict only
+            // taught them to press Scan without looking. Recognised text still stops in the
+            // editor, where a misread figure can be fixed first.
+            var straightToScan = false
             val result = try {
                 LeaseImport.read(getApplication(), uri) { step, done ->
                     _ui.update { it.copy(reading = step, readingProgress = done) }
@@ -234,6 +239,8 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                     _ui.update { it.copy(reading = null, readingProgress = null, message = result.message) }
 
                 is LeaseImport.Result.Read -> _ui.update { ui ->
+                    straightToScan = !photo && result.kind == LeaseImport.Kind.PDF &&
+                        !result.recognised && result.pages == result.totalPages
                     val adding = photo && ui.photoPages > 0
                     val pages = if (photo) ui.photoPages + 1 else 0
                     ui.copy(
@@ -246,6 +253,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                     )
                 }
             }
+            if (straightToScan) scan()
         }
     }
 
@@ -258,7 +266,11 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 "${read.name ?: "the PDF"}, ${read.pages} ${if (read.pages == 1) "page" else "pages"}"
             else -> read.name ?: "the file"
         }
-        return "Read from $what, on this phone. Check the text, then scan."
+        return if (read.recognised) {
+            "Read from $what, on this phone. Check the text, then scan."
+        } else {
+            "Read from $what, on this phone."
+        }
     }
 
     fun loadSample() {

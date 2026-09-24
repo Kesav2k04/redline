@@ -56,6 +56,12 @@ object LeaseImport {
             val kind: Kind,
             val pages: Int,
             val totalPages: Int,
+            /**
+             * True when any of the text came from recognising pixels rather than from a
+             * text layer. Recognised text can misread a "10", so it goes to the editor to
+             * be checked; a PDF's own text cannot, so it goes straight to the scan.
+             */
+            val recognised: Boolean = false,
         ) : Result
 
         data class Failed(val message: String) : Result
@@ -114,6 +120,7 @@ object LeaseImport {
                     val total = renderer.pageCount
                     val count = minOf(total, MAX_PAGES)
                     val pages = mutableListOf<List<String>>()
+                    var recognised = false
 
                     for (i in 0 until count) {
                         // The share of pages already read, once there is more than one to count.
@@ -124,6 +131,7 @@ object LeaseImport {
                             pages += if (layer.count(Char::isLetter) >= MIN_LAYER_LETTERS) {
                                 listOf(layer)
                             } else {
+                                recognised = true
                                 recognise(recogniser.value, InputImage.fromBitmap(render(page), 0))
                             }
                         } finally {
@@ -135,7 +143,7 @@ object LeaseImport {
                     return if (text.isBlank()) {
                         Result.Failed("No text found in that PDF.")
                     } else {
-                        Result.Read(text, name, Kind.PDF, count, total)
+                        Result.Read(text, name, Kind.PDF, count, total, recognised)
                     }
                 } finally {
                     if (recogniser.isInitialized()) recogniser.value.close()
@@ -203,7 +211,7 @@ object LeaseImport {
         return if (text.isBlank()) {
             Result.Failed("No text found. Try again with the page flat and in good light.")
         } else {
-            Result.Read(text, name, Kind.PHOTO, 1, 1)
+            Result.Read(text, name, Kind.PHOTO, 1, 1, recognised = true)
         }
     }
 
