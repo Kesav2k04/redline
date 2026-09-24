@@ -122,3 +122,40 @@ number stops meaning anything. It is listed here instead.
 That gap is also the honest shape of the whole approach. Rules catch what they were
 written to catch. When they miss, they miss silently and say nothing, which is why the
 app reports "no rule matched" rather than "this lease is clean".
+
+## US and English clauses
+
+`intl.tsv` holds 94 clauses from outside India: 55 from California, New York, Texas,
+Florida, Illinois (mostly the Chicago ordinance) and the HUD model lease, and 39 from
+England under the Tenant Fees Act 2019 and the Renters' Rights Act 2025. Each was
+labelled against the law where it applies before the scanner saw it. Costly means
+unlawful, of no effect there, or taking more than the local default.
+
+| | Before the US and UK rules | Now |
+|---|---|---|
+| US costly clauses caught | 6 / 26 | **18 / 26** |
+| US benign clauses left alone | 24 / 29 | **25 / 29** |
+| England costly clauses caught | 3 / 19 | **13 / 19** |
+| England benign clauses left alone | 19 / 20 | **20 / 20** |
+
+The eleven rules added for this set were written with these clauses open, so "now" is a
+regression check like the frozen corpus, not a measure of reach. `UsUkTest` pins it.
+
+Part of what is left cannot be fixed by a rule that reads one clause. Four sentences in
+the set appear under more than one state with opposite labels: a 5 percent late fee on
+2,000 dollars of rent breaks New York's 50 dollar cap and is ordinary in Texas, and a two
+month deposit breaks California's one month cap and is lawful in Florida. At least 6 of
+the 94 rows are wrong for any rule that cannot see which jurisdiction the lease is in.
+
+Where each row came from is in its `origin` and `source` columns:
+
+- **paraphrase** (69 rows): written for this set from the statute, regulation or official
+  guidance at `source`.
+- **verbatim, US** (4 rows): form HUD-90105a, the HUD model lease, a work of the US
+  government and in the public domain.
+- **verbatim, England** (19 rows): the government's model tenancy agreement and the Office
+  of Fair Trading's guidance on unfair tenancy terms (OFT356). Contains public sector
+  information licensed under the Open Government Licence v3.0.
+- **reworded** (2 rows, `u39` and `u40`): these follow the Florida Supreme Court approved
+  lease form, which states no licence, so the wording here is new and only the substance
+  is the form's.
