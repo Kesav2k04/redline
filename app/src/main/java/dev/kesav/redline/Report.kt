@@ -74,10 +74,16 @@ object Report {
      * told it is unfair, so this carries only where to look and what to change, in the
      * polite first person of someone who still wants the flat. Null when nothing was found,
      * because an empty list of requests is not a message anyone should send.
+     *
+     * [clauses] narrows it to the clauses the reader chose to raise, by clause index. Ten
+     * requests is a lot to put to a landlord with other applicants waiting, so the reader
+     * picks; null means all of them.
      */
-    fun letter(state: ScanState.Scanned): String? {
-        if (state.findings.isEmpty()) return null
-        val byClause = state.findings.groupBy { it.clause.index }
+    fun letter(state: ScanState.Scanned, clauses: Set<Int>? = null): String? {
+        val byClause = state.findings
+            .filter { clauses == null || it.clause.index in clauses }
+            .groupBy { it.clause.index }
+        if (byClause.isEmpty()) return null
         return buildString {
             appendLine("Hello,")
             appendLine()

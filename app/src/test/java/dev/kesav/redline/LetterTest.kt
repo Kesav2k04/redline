@@ -16,7 +16,28 @@ class LetterTest {
 
     private fun sample(): ScanState.Scanned {
         val clauses = ClauseSplitter.split(File("src/main/assets/sample_lease.txt").readText())
-        return ScanState.Scanned(clauses.size, Scanner.scan(clauses))
+        return ScanState.Scanned(clauses.size, Scanner.ranked(clauses))
+    }
+
+    @Test
+    fun `a narrowed letter asks only about the chosen clauses`() {
+        val state = sample()
+        val kept = state.groups.first()
+        val dropped = state.groups.last()
+        val letter = Report.letter(state, setOf(kept.clause.index))!!
+        for (f in kept.findings) {
+            assertTrue("kept ask missing: ${f.ask}", letter.contains(f.ask.replaceFirstChar { it.uppercase() }))
+        }
+        for (f in dropped.findings) {
+            assertFalse("dropped ask sent: ${f.ask}", letter.contains(f.ask.replaceFirstChar { it.uppercase() }))
+        }
+        // One clause is "one change", not "a few".
+        assertTrue(letter.contains("one change:"))
+    }
+
+    @Test
+    fun `choosing nothing writes no letter`() {
+        assertNull(Report.letter(sample(), emptySet()))
     }
 
     @Test

@@ -162,6 +162,7 @@ fun ScanScreen(
     // different moments: "why would I paste my lease into this" before the scan, and
     // "where did eleven come from" after it.
     var showChecks by remember { mutableStateOf(false) }
+    var letterFor by remember { mutableStateOf<ScanState.Scanned?>(null) }
 
     // Without this, a back swipe on the results screen finishes the activity and closes
     // the app. The reader's own lease is still in the text field behind it, so the app
@@ -296,7 +297,7 @@ fun ScanScreen(
                 onRestore = viewModel::restore,
                 onBack = viewModel::back,
                 onShare = { scope.launch { context.startActivity(shareReport(context, state)) } },
-                onLetter = { Report.letter(state)?.let { context.startActivity(shareLetter(it)) } },
+                onLetter = { letterFor = state },
                 onShareCount = { scope.launch { context.startActivity(shareCardIntent(context, state)) } },
                 onChecks = { showChecks = true },
                 modifier = content.graphicsLayer {
@@ -316,6 +317,16 @@ fun ScanScreen(
 
         if (showChecks) {
             ChecksSheet(onDismiss = { showChecks = false })
+        }
+        letterFor?.let { scanned ->
+            LetterSheet(
+                state = scanned,
+                onSend = { letter ->
+                    context.startActivity(shareLetter(letter))
+                    letterFor = null
+                },
+                onDismiss = { letterFor = null },
+            )
         }
     }
 }
@@ -1110,7 +1121,7 @@ private fun NotALeaseNotice() {
 }
 
 /** The word for a severity, the same on the card, in the legend and when read aloud. */
-private fun severityWord(severity: Severity): String = when (severity) {
+internal fun severityWord(severity: Severity): String = when (severity) {
     Severity.HIGH -> "Serious"
     Severity.MEDIUM -> "Worth checking"
 }

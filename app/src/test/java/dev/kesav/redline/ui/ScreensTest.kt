@@ -160,6 +160,18 @@ class ScreensTest {
         shot("report-open-land")
     }
 
+    // The letter sheet's content, drawn in place: a ModalBottomSheet opens a window of its
+    // own, which a root capture does not see.
+    @Test
+    fun letter() {
+        screen {
+            androidx.compose.foundation.layout.Column {
+                LetterChooser(sample(), onSend = {})
+            }
+        }
+        shot("letter")
+    }
+
     @Test
     fun reportPdf() {
         val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<Application>()
