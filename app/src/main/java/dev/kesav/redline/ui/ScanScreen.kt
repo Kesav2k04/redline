@@ -127,6 +127,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -779,15 +782,20 @@ internal fun Results(
                     Spacer(Modifier.width(10.dp))
                     Text("Ask the landlord for these changes", style = MaterialTheme.typography.labelLarge)
                 }
-                TextButton(
-                    onClick = onShare,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
-                ) {
-                    Text("Send the full report to someone else")
+                // On a phone turned sideways the bar was a third of the screen. The share
+                // icon in the header sends the same report, so the link can go when height
+                // is short and the clauses get the room.
+                if (LocalConfiguration.current.screenHeightDp >= 480) {
+                    TextButton(
+                        onClick = onShare,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                    ) {
+                        Text("Send the full report to someone else")
+                    }
                 }
             }
         }
@@ -975,6 +983,7 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
 }
 
 /** Serious, worth checking and clear, as one bar the width of the card. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SeverityBar(
     serious: Int,
@@ -1009,8 +1018,11 @@ private fun SeverityBar(
             if (other > 0) Box(Modifier.weight(other.toFloat() / total).fillMaxHeight().background(amber))
             if (clear > 0) Box(Modifier.weight(clear.toFloat() / total).fillMaxHeight().background(hero.content.copy(alpha = 0.18f)))
         }
-        Row(
+        // Wraps rather than squeezes: at the largest font size a Row stood "5 clear" on
+        // end, one letter per line.
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.graphicsLayer { alpha = legendAlpha() },
         ) {
             Legend(hero.accent, "$serious serious")

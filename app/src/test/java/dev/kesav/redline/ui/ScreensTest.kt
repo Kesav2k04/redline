@@ -3,6 +3,10 @@ package dev.kesav.redline.ui
 import android.app.Application
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -71,6 +75,8 @@ class ScreensTest {
         state = sample(), unlocked = unlocked, known = true, busy = false, price = "$4.99",
         onUnlock = {}, onRestore = {}, onBack = {}, onShare = {}, onLetter = {},
         onShareCount = {}, onChecks = {},
+        // The cap ScanScreen puts on every state, so a wide screen is pictured as it ships.
+        modifier = Modifier.fillMaxSize().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = 640.dp),
     )
 
     @Test
@@ -128,6 +134,30 @@ class ScreensTest {
         screen { Report(unlocked = true) }
         compose.onAllNodes(hasScrollAction()).onFirst().performScrollToIndex(1)
         shot("report-open-dark")
+    }
+
+    // The largest system font size. The price button, the free card and the Scan route
+    // have to stay readable and reachable, not clipped or pushed off the screen.
+    @Test
+    @Config(fontScale = 2.0f)
+    fun startLargeText() {
+        screen { Start() }
+        shot("start-font2")
+    }
+
+    @Test
+    @Config(fontScale = 2.0f)
+    fun reportLargeText() {
+        screen { Report(unlocked = false) }
+        shot("report-locked-font2")
+    }
+
+    // A phone on its side: the content column is capped at 640dp and centred.
+    @Test
+    @Config(qualifiers = "+land")
+    fun reportLandscape() {
+        screen { Report(unlocked = true) }
+        shot("report-open-land")
     }
 
     @Test
