@@ -79,6 +79,13 @@ class PaywallShotTest {
     }
 
     @Test
+    fun draft() {
+        screen { DraftSheet(state = sample(), onDismiss = {}) }
+        compose.waitForIdle()
+        captureScreenRoboImage("build/shots/draft.png")
+    }
+
+    @Test
     fun reportSections() {
         screen {
             Results(
@@ -89,5 +96,7 @@ class PaywallShotTest {
         }
         compose.onAllNodes(hasScrollAction()).onFirst().performScrollToIndex(1)
         compose.onRoot().captureRoboImage("build/shots/report-bento.png")
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToIndex(3)
+        compose.onRoot().captureRoboImage("build/shots/report-money.png")
     }
 }

@@ -113,11 +113,21 @@ internal fun MoneyCard(
             Spacer(Modifier.width(Space.m))
             Column(Modifier.weight(1f)) {
                 Eyebrow("Money at stake")
-                Text(
-                    text = total?.let { money(exposure.symbol, it) } ?: "${monthsText(exposure.months)} of rent",
-                    style = FigureStyle.copy(fontSize = 28.sp, lineHeight = 32.sp),
-                    color = colors.high,
-                )
+                if (total != null) {
+                    Text(money(exposure.symbol, total), style = FigureStyle.copy(fontSize = 28.sp, lineHeight = 32.sp), color = colors.high)
+                } else {
+                    // The count in figures, the unit in words: a mono "months of rent" reads typed.
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        val n = monthsText(exposure.months).substringBefore(' ')
+                        Text(n, style = FigureStyle.copy(fontSize = 30.sp, lineHeight = 32.sp), color = colors.high)
+                        Text(
+                            if (n == "1") " month of rent" else " months of rent",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colors.high,
+                            modifier = Modifier.padding(bottom = 3.dp),
+                        )
+                    }
+                }
                 if (total == null && exposure.fixed > 0) {
                     Text("plus ${money(exposure.symbol, exposure.fixed)}", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 }
@@ -156,20 +166,32 @@ internal fun MoneyCard(
         }
         items.forEachIndexed { i, cost ->
             if (i > 0) HorizontalDivider(color = scheme.outlineVariant)
-            CostRow(cost, costText(exposure, cost, monthly), shades[i.coerceAtMost(shades.lastIndex)], locked)
+            CostRow(cost, costText(exposure, cost, monthly), exposure.amountOf(cost, monthly) != null, shades[i.coerceAtMost(shades.lastIndex)], locked)
         }
         if (exposure.repeating.isNotEmpty()) {
             Spacer(Modifier.height(Space.m))
             Eyebrow("Charges that repeat")
             exposure.repeating.forEach { cost ->
-                CostRow(cost, costText(exposure, cost, monthly) + ", " + (cost.every ?: ""), colors.medium.copy(alpha = 0.5f), locked)
+                CostRow(cost, costText(exposure, cost, monthly), exposure.amountOf(cost, monthly) != null && cost.months == 0.0, colors.medium.copy(alpha = 0.5f), locked)
+            }
+        }
+        if (locked) {
+            Spacer(Modifier.height(Space.s))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Icon(RedlineIcons.Lock, null, Modifier.size(14.dp), tint = scheme.onSurfaceVariant)
+                Text(
+                    "Which clause each sum comes from, and the working, are in the full report.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = Space.s),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun CostRow(cost: dev.kesav.redline.Cost, figure: String, dot: Color, locked: Boolean) {
+private fun CostRow(cost: dev.kesav.redline.Cost, figure: String, isMoney: Boolean, dot: Color, locked: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = Space.s),
         verticalAlignment = Alignment.Top,
@@ -177,13 +199,20 @@ private fun CostRow(cost: dev.kesav.redline.Cost, figure: String, dot: Color, lo
         Box(Modifier.padding(top = 6.dp).size(8.dp).clip(CircleShape).background(dot))
         Column(Modifier.weight(1f).padding(start = Space.m, end = Space.m)) {
             Text(cost.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(
-                text = if (locked) "Which clause, and the working, are in the full report." else cost.basis,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (!locked) {
+                Text(cost.basis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        Text(figure, style = FigureStyle.copy(fontSize = 14.sp), textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 150.dp))
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(max = 160.dp)) {
+            Text(
+                figure,
+                style = if (isMoney) FigureStyle.copy(fontSize = 15.sp) else MaterialTheme.typography.labelLarge,
+                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            )
+            cost.every?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 

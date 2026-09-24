@@ -6,6 +6,11 @@
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- The drafter opens WhatsApp directly when it is installed, and the chooser otherwise. -->
+    <queries>
+        <package android:name="com.whatsapp" />
+    </queries>
+
     <application
         android:name=".RedlineApp"
         android:allowBackup="true"

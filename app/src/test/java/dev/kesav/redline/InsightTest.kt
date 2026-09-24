@@ -17,6 +17,8 @@ class InsightTest {
     fun everyRuleHasACategory() {
         val missing = Scanner.asks.keys - Insights.mappedRuleIds
         assertTrue("rules with no category: $missing", missing.isEmpty())
+        val noCounter = Scanner.asks.keys - Drafts.counterRuleIds
+        assertTrue("rules with no proposed wording: $noCounter", noCounter.isEmpty())
     }
 
     @Test

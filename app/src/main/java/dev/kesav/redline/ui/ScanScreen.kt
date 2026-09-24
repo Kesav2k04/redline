@@ -369,14 +369,7 @@ fun ScanScreen(
             )
         }
         letterFor?.let { scanned ->
-            LetterSheet(
-                state = scanned,
-                onSend = { letter ->
-                    context.startActivity(shareLetter(letter))
-                    letterFor = null
-                },
-                onDismiss = { letterFor = null },
-            )
+            DraftSheet(state = scanned, onDismiss = { letterFor = null })
         }
     }
     if (scanning) {
