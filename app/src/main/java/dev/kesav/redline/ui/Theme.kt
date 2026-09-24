@@ -1,5 +1,10 @@
 package dev.kesav.redline.ui
 
+import android.provider.Settings
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -9,7 +14,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -142,9 +149,15 @@ private val RedlineType = base.copy(
     displaySmall = base.displaySmall.copy(fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.8).sp),
     headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp),
     titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-    titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
-    labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
-    bodyLarge = base.bodyLarge.copy(lineHeight = 24.sp),
+    titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 17.sp, lineHeight = 24.sp, letterSpacing = 0.sp),
+    // Material's body tracking (0.25 to 0.5sp) assumes glanceable UI text and reads airy on
+    // a paragraph of legal reasons. Body sits near zero, small text slightly positive, and
+    // body and meta are a size up because what they carry is meant to be read, not scanned.
+    labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, letterSpacing = 0.1.sp),
+    labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.2.sp),
+    bodyLarge = base.bodyLarge.copy(lineHeight = 24.sp, letterSpacing = 0.15.sp),
+    bodyMedium = base.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp, letterSpacing = 0.1.sp),
+    bodySmall = base.bodySmall.copy(letterSpacing = 0.2.sp),
 )
 
 /** The quoted clause, set like the document it came from rather than like the app. */
@@ -153,6 +166,59 @@ val QuoteStyle = TextStyle(
     fontSize = 15.sp,
     lineHeight = 22.sp,
 )
+
+/**
+ * One set of springs, easings and stagger for the whole app, so the scan, the count, the
+ * cards and the reveal move as if one hand made them.
+ *
+ * Material's own MotionScheme would supply these but is internal in material3 1.4.0, so the
+ * values are copied from its token files. Springs start from wherever a value currently is,
+ * which is what keeps an interrupted animation from jumping.
+ */
+internal object RedlineMotion {
+    /** Layout moves: critically damped enough to settle without a wobble. */
+    fun <T> spatial() = spring<T>(dampingRatio = 0.9f, stiffness = 700f)
+    /** The scan hand-off, the one move allowed a little give. */
+    fun <T> spatialExpressive() = spring<T>(dampingRatio = 0.8f, stiffness = 380f)
+    /** A nudge on the call to action, nowhere else. */
+    fun <T> spatialBouncy() = spring<T>(dampingRatio = 0.6f, stiffness = 800f)
+    /** Alpha and colour. */
+    fun <T> effects() = spring<T>(dampingRatio = 1f, stiffness = 1600f)
+    /** Press feedback. */
+    fun <T> effectsFast() = spring<T>(dampingRatio = 1f, stiffness = 3800f)
+    /** Material emphasized decelerate, for things arriving. */
+    val Decelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+    /** Material emphasized accelerate, for things leaving, which always go faster. */
+    val Accelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+    const val STAGGER_MS = 40
+    const val STAGGER_CAP = 6
+}
+
+/**
+ * Zero when the reader has turned animations off system-wide.
+ *
+ * Developer options and the accessibility "remove animations" setting both write this,
+ * and honouring it costs one read. An app that keeps animating after someone has asked
+ * the whole device to stop is not being expressive, it is ignoring an instruction.
+ */
+@Composable
+internal fun animationsEnabled(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        runCatching {
+            Settings.Global.getFloat(
+                context.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f,
+            )
+        }.getOrDefault(1f) > 0f
+    }
+}
+
+/** [spec] when animations are on, and the final frame at once when the reader turned them off. */
+@Composable
+internal fun <T> motion(spec: FiniteAnimationSpec<T>): FiniteAnimationSpec<T> =
+    if (animationsEnabled()) spec else snap()
 
 // Dynamic colour is off on purpose: the demo recording has to look the same on
 // any machine that plays it.

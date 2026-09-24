@@ -112,7 +112,7 @@ object Report {
     }
 
     private fun label(severity: Severity): String = when (severity) {
-        Severity.HIGH -> "COSTLY"
+        Severity.HIGH -> "SERIOUS"
         Severity.MEDIUM -> "WORTH CHECKING"
     }
 

@@ -35,7 +35,7 @@ class LetterTest {
         for (f in state.findings) {
             assertFalse("reason leaked: ${f.reason}", letter.contains(f.reason))
         }
-        assertFalse(letter.contains("COSTLY"))
+        assertFalse(letter.contains("SERIOUS"))
         assertFalse(letter.contains("Redline"))
     }
 

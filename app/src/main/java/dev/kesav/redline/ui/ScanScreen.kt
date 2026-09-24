@@ -89,6 +89,20 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -352,6 +366,27 @@ private fun Results(
     // read 4 clauses in this lease", and sending that about a recipe puts the app's
     // mistake in someone else's inbox with its name on it.
     val shareable = state.findings.isNotEmpty() && state.looksLikeLease && (unlocked || !state.sellable)
+    val locked = !unlocked && state.sellable
+    val listState = rememberLazyListState()
+    val lifted by remember { derivedStateOf { listState.canScrollForward } }
+
+    // A tap on the locked index never starts a payment: an accidental tap mid-scroll must
+    // not raise a purchase sheet. It points at the button that does, by feel, by motion
+    // and, for a screen reader, in words.
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val moving = animationsEnabled()
+    val nudge = remember { Animatable(1f) }
+    var hint by remember { mutableStateOf("") }
+    val onNudge: () -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.Reject)
+        // Alternating the final character makes a repeated tap announce again.
+        hint = if (hint.endsWith(".")) "Open them with the button below" else "Open them with the button below."
+        if (moving) scope.launch {
+            nudge.animateTo(1.04f, RedlineMotion.spatialBouncy())
+            nudge.animateTo(1f, RedlineMotion.spatialBouncy())
+        }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -373,8 +408,10 @@ private fun Results(
             }
         }
 
+        Box(Modifier.weight(1f)) {
         LazyColumn(
-            modifier = Modifier.weight(1f),
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
             // Extra room at the foot so the last card clears the pinned offer bar.
             // Without it the bar sits on top of the final card and crops it, which
             // reads as an unfinished screen rather than as a scroll position.
@@ -387,14 +424,19 @@ private fun Results(
                 item { NotALeaseNotice() }
             }
 
-            itemsIndexed(state.groups) { index, group ->
-                // The first one is shown in full so the rest are a known quantity.
-                // Nothing is redacted when nothing is for sale.
-                ClauseCard(
-                    group,
-                    revealed = unlocked || !state.looksLikeLease || index == 0,
-                    row = index,
-                )
+            if (locked) {
+                // The first one is shown in full so the rest are a known quantity. The
+                // rest are one list of subjects rather than a column of black bars: two
+                // of six readers took the bars for a broken app and tapped them.
+                state.groups.firstOrNull()?.let { first ->
+                    item(key = "clause-${first.clause.index}") { ClauseCard(first) }
+                }
+                val rest = state.groups.drop(1)
+                if (rest.isNotEmpty()) {
+                    item(key = "locked") { LockedIndex(rest, onTap = onNudge) }
+                }
+            } else {
+                items(state.groups, key = { "clause-${it.clause.index}" }) { group -> ClauseCard(group) }
             }
 
             // At the foot rather than in the pinned bar. Someone who has scrolled past
@@ -426,6 +468,30 @@ private fun Results(
             }
         }
 
+        // A card passing under the bar fades out instead of being sliced by its edge,
+        // which three of six readers called unfinished.
+        if (locked || shareable) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(24.dp)
+                    .background(
+                        Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))
+                    )
+            )
+        }
+        // Spoken only: the hint the locked index gives a screen reader when tapped.
+        Box(
+            Modifier
+                .size(1.dp)
+                .semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    if (hint.isNotEmpty()) contentDescription = hint
+                }
+        )
+        }
+
         // The offer used to be the last item in the list, which put the price below
         // eighteen locked cards where nobody met it without first deciding to scroll for
         // it. The moment a reader is willing to pay is the moment they learn how much
@@ -438,8 +504,8 @@ private fun Results(
         // and free in that case, so there is nothing behind a paywall to sell, and a
         // paywall over a scan of somebody's recipe is the single worst thing this app
         // could be caught doing.
-        if (!unlocked && state.sellable) {
-            BottomBar {
+        if (locked) {
+            BottomBar(lifted) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -472,6 +538,10 @@ private fun Results(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 56.dp)
+                        .graphicsLayer {
+                            scaleX = nudge.value
+                            scaleY = nudge.value
+                        }
                         .semantics {
                             if (busy) contentDescription = "Completing your purchase"
                         },
@@ -492,27 +562,18 @@ private fun Results(
                         Text(unlockLabel(state.groups.size - 1, price), style = MaterialTheme.typography.labelLarge)
                     }
                 }
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    TextButton(
-                        onClick = onRestore,
-                        enabled = known && !busy,
-                        shape = MaterialTheme.shapes.medium,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                    ) {
-                        Text("Already bought it? Restore")
-                    }
-                    TextButton(
-                        onClick = onBack,
-                        shape = MaterialTheme.shapes.medium,
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        colors = ButtonDefaults.textButtonColors(
-                            // Next to a filled button this was the same red, so going back
-                            // to edit signalled just as loudly as paying.
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                    ) {
-                        Text("Edit text")
-                    }
+                TextButton(
+                    onClick = onRestore,
+                    enabled = known && !busy,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        // A second red button beside the red one made restoring look as
+                        // loud as paying.
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                ) {
+                    Text("Already bought it? Restore")
                 }
             }
         } else if (shareable) {
@@ -522,7 +583,7 @@ private fun Results(
             //
             // Two readers, two messages. The landlord gets the requests and nothing else;
             // a parent or an adviser gets the quoted clauses and the reasons.
-            BottomBar {
+            BottomBar(lifted) {
                 Button(
                     onClick = onLetter,
                     shape = MaterialTheme.shapes.medium,
@@ -547,13 +608,26 @@ private fun Results(
     }
 }
 
-/** The pinned foot of the report: lifted off the list so it never reads as the last card. */
+/**
+ * The pinned foot of the report.
+ *
+ * It casts a shadow only while there is content scrolled under it, because elevation over
+ * nothing is decoration. In dark mode a shadow cannot be seen, so a hairline does the job.
+ */
 @Composable
-private fun BottomBar(content: @Composable () -> Unit) {
+private fun BottomBar(lifted: Boolean, content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    val scheme = MaterialTheme.colorScheme
+    val shadow by animateDpAsState(
+        targetValue = if (lifted && !dark) 3.dp else 0.dp,
+        animationSpec = motion(tween(150)),
+        label = "barShadow",
+    )
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        color = if (dark) scheme.surfaceContainerHigh else scheme.surfaceContainerLowest,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        shadowElevation = 12.dp,
+        shadowElevation = shadow,
+        border = if (dark) BorderStroke(1.dp, scheme.outlineVariant) else null,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
@@ -708,40 +782,6 @@ private fun Legend(color: Color, label: String) {
 }
 
 /**
- * How long the report takes to open, and why it is not instant.
- *
- * The moment the purchase lands is the only moment in this app worth animating. A hard
- * swap from redaction to text reads as a screen being replaced; opening the cards in
- * sequence down the list reads as a document being unsealed, which is what the reader
- * just paid for. The stagger caps early so a long report does not make the last card
- * wait on the first twenty.
- */
-private const val REVEAL_MS = 260
-private const val REVEAL_STAGGER_MS = 45
-private const val REVEAL_STAGGER_CAP = 8
-
-/**
- * Zero when the reader has turned animations off system-wide.
- *
- * Developer options and the accessibility "remove animations" setting both write this,
- * and honouring it costs one read. An app that keeps animating after someone has asked
- * the whole device to stop is not being expressive, it is ignoring an instruction.
- */
-@Composable
-internal fun animationsEnabled(): Boolean {
-    val context = LocalContext.current
-    return remember(context) {
-        runCatching {
-            Settings.Global.getFloat(
-                context.contentResolver,
-                Settings.Global.ANIMATOR_DURATION_SCALE,
-                1f,
-            )
-        }.getOrDefault(1f) > 0f
-    }
-}
-
-/**
  * The line under the heading, which is the legend for the chips on the cards.
  *
  * Two earlier versions were wrong in opposite directions. "9 of them are worth arguing
@@ -808,37 +848,32 @@ private fun NotALeaseNotice() {
     }
 }
 
+/** The word for a severity, the same on the card, in the legend and when read aloud. */
+private fun severityWord(severity: Severity): String = when (severity) {
+    Severity.HIGH -> "Serious"
+    Severity.MEDIUM -> "Worth checking"
+}
+
 @Composable
-private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
+private fun ClauseCard(group: ClauseGroup) {
     val count = group.findings.size
     val problems = if (count == 1) "1 problem" else "$count problems"
     val scheme = MaterialTheme.colorScheme
-    val edge = if (group.worst == Severity.HIGH) scheme.primary else scheme.tertiary
+    val mark = if (group.worst == Severity.HIGH) scheme.primary else scheme.tertiary
 
-    val spoken = if (revealed) {
-        // The clause text belongs in here. Leaving it out told a screen reader that a
-        // costly clause existed and what it was called, then withheld the sentence the
-        // whole app exists to show, which is the one thing a sighted reader gets for
-        // free by looking down two lines.
-        buildString {
-            append("${group.worst.name.lowercase()} risk, $problems. ")
-            for (f in group.findings) {
-                append("${f.headline}. ${f.reason} ")
-                if (f.ask.isNotBlank()) append("Ask for ${f.ask}. ")
-            }
-            append("The clause reads: ${group.clause.text}")
+    // The clause text belongs in here. Leaving it out told a screen reader that a costly
+    // clause existed and what it was called, then withheld the sentence the whole app
+    // exists to show, which is the one thing a sighted reader gets for free by looking
+    // down two lines.
+    val spoken = buildString {
+        append("${severityWord(group.worst)}, $problems. ")
+        for (f in group.findings) {
+            append("${f.headline}. ${f.reason} ")
+            if (f.ask.isNotBlank()) append("Ask for ${f.ask}. ")
         }
-    } else {
-        "Locked clause, ${group.worst.name.lowercase()} risk, $problems. " +
-            "Buy the report to read it."
+        append("The clause reads: ${group.clause.text}")
     }
 
-    val delay = if (animationsEnabled()) minOf(row, REVEAL_STAGGER_CAP) * REVEAL_STAGGER_MS else 0
-    val duration = if (animationsEnabled()) REVEAL_MS else 0
-
-    // A red or amber rule down the left edge, which is how a lawyer marks a clause in the
-    // margin, and the one thing that tells the two severities apart at a glance while
-    // scrolling fast.
     Surface(
         color = scheme.surfaceContainerLowest,
         shape = MaterialTheme.shapes.large,
@@ -846,91 +881,133 @@ private fun ClauseCard(group: ClauseGroup, revealed: Boolean, row: Int = 0) {
             .fillMaxWidth()
             .clearAndSetSemantics { contentDescription = spoken },
     ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(Modifier.width(5.dp).fillMaxHeight().background(edge))
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SeverityChip(group.worst)
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SeverityMark(group.worst)
+                Text(problems, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+            }
 
-                    // Without this word the grey bars below are a loading skeleton, which
-                    // is the single most expensive misread available: a reviewer watching
-                    // the video concludes the app is still fetching rather than that
-                    // there is something behind a paywall. The count is deliberately
-                    // given away for free: "3 problems" on a locked card is both a real
-                    // unit of information and the most honest argument for paying.
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        if (!revealed) {
-                            Icon(
-                                RedlineIcons.Lock,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = scheme.onSurfaceVariant,
-                            )
-                        }
-                        Text(
-                            text = if (revealed) problems else "$problems, locked",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = scheme.onSurfaceVariant,
+            // The subject, in grey: the mark and the margin already carry the colour.
+            Text(
+                text = group.findings.first().topic,
+                style = MaterialTheme.typography.labelLarge,
+                color = scheme.onSurfaceVariant,
+            )
+
+            // A margin mark beside what the scanner says, the way a lawyer marks a clause.
+            // Drawn behind the column so it follows the text at any font scale, and inset
+            // rather than run down the card edge, where the corner radius clipped it.
+            Column(
+                modifier = Modifier
+                    .drawBehind {
+                        val w = 4.dp.toPx()
+                        drawRoundRect(
+                            color = mark,
+                            topLeft = Offset(0f, 2.dp.toPx()),
+                            size = Size(w, size.height - 4.dp.toPx()),
+                            cornerRadius = CornerRadius(w / 2),
                         )
                     }
-                }
-
-                // The subject is never withheld. Knowing a clause is about the deposit is
-                // not knowing what is wrong with it, and "Your deposit, 5 problems" argues
-                // for itself in a way three anonymous bars never will.
-                Text(
-                    text = group.findings.first().topic,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = edge,
-                )
-
-                AnimatedContent(
-                    targetState = revealed,
-                    transitionSpec = {
-                        fadeIn(tween(duration, delayMillis = delay)) togetherWith
-                            fadeOut(tween(duration / 2))
-                    },
-                    label = "finding",
-                ) { open ->
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (open) {
-                            for (f in group.findings) {
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(f.headline, style = MaterialTheme.typography.titleMedium)
-                                    Text(
-                                        f.reason,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = scheme.onSurfaceVariant,
-                                    )
-                                    if (f.ask.isNotBlank()) Ask(f.ask, Modifier.padding(top = 6.dp))
-                                }
-                            }
-                            // Quoted once at the foot of the card, however many rules it
-                            // tripped. Repeating the paragraph under every finding was
-                            // read as padding the count rather than as thoroughness.
-                            Quote(group.clause.text, Modifier.padding(top = 4.dp))
-                        } else {
-                            // Redaction rather than a blur: Modifier.blur does nothing
-                            // below API 31 and would quietly show the text it hides.
-                            //
-                            // One bar per hidden finding, up to three: a card printing
-                            // "1 problem" above three bars contradicts its own count.
-                            // Widths come from the clause, because identical cards in a
-                            // row read as one placeholder repeated.
-                            val bars = redactionWidths(group.clause.text)
-                            val heights = listOf(16.dp, 12.dp, 12.dp)
-                            repeat(minOf(group.findings.size, 3)) { i ->
-                                Redacted(widthFraction = bars[i], height = heights[i])
-                            }
-                        }
+                    .padding(start = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                for (f in group.findings) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(f.headline, style = MaterialTheme.typography.titleMedium)
+                        Text(f.reason, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                        if (f.ask.isNotBlank()) Ask(f.ask, Modifier.padding(top = 6.dp))
                     }
+                }
+            }
+
+            // Quoted once at the foot of the card, however many rules it tripped.
+            // Repeating the paragraph under every finding was read as padding the count
+            // rather than as thoroughness.
+            Quote(group.clause.text, Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+/** A small square in the severity colour and the word beside it. No container. */
+@Composable
+private fun SeverityMark(severity: Severity) {
+    val scheme = MaterialTheme.colorScheme
+    val color = if (severity == Severity.HIGH) scheme.primary else scheme.tertiary
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(8.dp).background(color, RoundedCornerShape(2.dp)))
+        Text(severityWord(severity), style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+    }
+}
+
+private data class LockedTopic(val name: String, val clauses: Int, val serious: Boolean)
+
+/**
+ * What the purchase opens, named by subject, in one card.
+ *
+ * The subjects are public already (the checks sheet lists them), and saying them in words
+ * is the honest way to sell what is behind the lock. Topics that repeat merge into one row
+ * with a clause count, so "What you pay for" is never printed twice in a row, and the
+ * counts add up to the same number the button offers.
+ */
+@Composable
+private fun LockedIndex(locked: List<ClauseGroup>, onTap: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val topics = remember(locked) {
+        locked.groupBy { it.findings.first().topic }
+            .map { (name, groups) -> LockedTopic(name, groups.size, groups.any { it.worst == Severity.HIGH }) }
+            .sortedWith(compareBy { !it.serious })
+    }
+    val more = if (locked.size == 1) "1 more clause, locked" else "${locked.size} more clauses, locked"
+    val spoken = "$more. " + topics.joinToString("; ") {
+        "${it.name}, " + if (it.clauses == 1) "1 clause" else "${it.clauses} clauses"
+    }
+    Surface(
+        onClick = onTap,
+        shape = MaterialTheme.shapes.large,
+        color = scheme.surfaceContainerLowest,
+        modifier = modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics {
+                contentDescription = spoken
+                onClick(label = "show how to open them") { onTap(); true }
+            },
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(RedlineIcons.Lock, contentDescription = null, modifier = Modifier.size(18.dp), tint = scheme.onSurface)
+                Text(more, style = MaterialTheme.typography.titleMedium)
+            }
+            Text(
+                "In the full report: each clause quoted, why it costs you, and what to ask for.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            for (t in topics) {
+                HorizontalDivider(color = scheme.outlineVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(width = 3.dp, height = 20.dp)
+                            .background(if (t.serious) scheme.primary else scheme.tertiary, RoundedCornerShape(1.5.dp))
+                    )
+                    Text(
+                        t.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(start = 12.dp).weight(1f),
+                    )
+                    Text(
+                        if (t.clauses == 1) "1 clause" else "${t.clauses} clauses",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = scheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -964,55 +1041,6 @@ private fun Ask(ask: String, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
         )
     }
-}
-
-/**
- * Three bar widths for one hidden finding, stable across launches.
- *
- * Derived from the headline rather than from a random source, so the same finding always
- * redacts to the same silhouette. A reader scrolling back up finds the card looking how
- * they left it, and a screen recording can be re-shot and still match the first take.
- */
-internal fun redactionWidths(headline: String): FloatArray {
-    var h = 0
-    for (c in headline) h = h * 31 + c.code
-    fun pick(shift: Int, low: Float, span: Float): Float =
-        low + span * (((h ushr shift) and 0x7) / 7f)
-    return floatArrayOf(pick(0, 0.52f, 0.36f), pick(4, 0.80f, 0.19f), pick(8, 0.38f, 0.34f))
-}
-
-@Composable
-private fun Redacted(widthFraction: Float, height: Dp) {
-    Box(
-        Modifier
-            .fillMaxWidth(widthFraction)
-            .height(height)
-            .background(
-                // Dark, because this is a redaction and redactions are dark. At 13%
-                // these were pale grey bars of text-like widths, which is the exact
-                // drawing of a loading placeholder, and a still frame cannot tell a
-                // reader which one it is looking at. A censored document can.
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
-                RoundedCornerShape(2.dp),
-            )
-    )
-}
-
-@Composable
-private fun SeverityChip(severity: Severity) {
-    val scheme = MaterialTheme.colorScheme
-    val (label, container, content) = when (severity) {
-        Severity.HIGH -> Triple("Costly", scheme.primaryContainer, scheme.onPrimaryContainer)
-        Severity.MEDIUM -> Triple("Worth checking", scheme.tertiaryContainer, scheme.onTertiaryContainer)
-    }
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium,
-        color = content,
-        modifier = Modifier
-            .background(container, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-    )
 }
 
 /** Where the camera app writes a page. One file, reused and deleted after each read. */
