@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -242,8 +243,11 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
      * costs them; the field is where a misread "10" can be corrected.
      */
     fun import(uri: Uri, photo: Boolean = false, after: () -> Unit = {}) {
-        if (_ui.value.reading != null) return after()
-        viewModelScope.launch {
+        // The scanner stays open for page after page, so a photo taken while the last one is
+        // still being read waits its turn instead of being dropped. Anything else arriving
+        // mid-read is refused, as before: it would replace the document being read.
+        if (!photo && _ui.value.reading != null) return after()
+        viewModelScope.launch { importLock.withLock {
             _ui.update { it.copy(reading = "Opening the file", readingProgress = null, message = null) }
             // A whole PDF read from its own text layer has nothing to proofread, and
             // parking the reader in front of fourteen pages of it before the verdict only
@@ -277,8 +281,10 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 }
             }
             if (straightToScan) scan()
-        }
+        } }
     }
+
+    private val importLock = kotlinx.coroutines.sync.Mutex()
 
     private fun describe(read: LeaseImport.Result.Read, photoPages: Int): String {
         val what = when {

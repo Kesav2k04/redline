@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -240,6 +241,12 @@ internal fun RiskGauge(
 
     Box(
         modifier = modifier
+            // The arc is open at the bottom, so the square it is drawn in reports only the part
+            // with ink in it and the text below sits up against the dial.
+            .layout { m, c ->
+                val p = m.measure(c)
+                layout(p.width, (p.height * 0.84f).toInt()) { p.place(0, 0) }
+            }
             .aspectRatio(1f)
             .semantics(mergeDescendants = true) {
                 contentDescription = "Risk score $score out of 100. ${tier.label}."

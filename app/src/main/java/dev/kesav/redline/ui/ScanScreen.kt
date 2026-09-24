@@ -146,6 +146,8 @@ import dev.kesav.redline.R
 import dev.kesav.redline.ScanState
 import dev.kesav.redline.ScanViewModel
 import dev.kesav.redline.Severity
+import dev.kesav.redline.ui.camera.CameraScan
+import dev.kesav.redline.ui.camera.deleteScannedPage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -227,18 +229,13 @@ fun ScanScreen(
         uri?.let { viewModel.import(it) }
     }
 
-    // The camera app writes the photo into this app's cache through a FileProvider, so
-    // there is no camera permission either. The file is deleted once it has been read:
-    // a photo of somebody's lease has no business outliving the scan.
+    // The scanner is the app's own screen, so the reader never leaves for a camera app and
+    // comes back to a process that was killed behind it. Each page is read on the phone and
+    // its photo deleted once the text is out of it.
     val hasCamera = remember(context) {
         context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
     }
-    var photoTarget by rememberSaveable { mutableStateOf<Uri?>(null) }
-    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
-        val target = photoTarget ?: return@rememberLauncherForActivityResult
-        val file = pagePhoto(context)
-        if (saved) viewModel.import(target, photo = true) { file.delete() } else file.delete()
-    }
+    var scanning by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(ui.message) {
         ui.message?.let {
@@ -249,6 +246,7 @@ fun ScanScreen(
 
     // No app bar. Each state draws its own header: the first screen leads with what
     // the app promises, and "Redline" in a bar above it only repeated the launcher label.
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
@@ -297,21 +295,7 @@ fun ScanScreen(
                 source = ui.source,
                 photoPages = ui.photoPages,
                 onOpen = { openFile.launch(arrayOf("application/pdf", "image/*", "text/plain")) },
-                onPhoto = if (!hasCamera) null else {
-                    {
-                        val uri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.files",
-                            pagePhoto(context),
-                        )
-                        photoTarget = uri
-                        try {
-                            takePhoto.launch(uri)
-                        } catch (e: ActivityNotFoundException) {
-                            viewModel.say("No camera app is available. Take the photo first, then open it here.")
-                        }
-                    }
-                },
+                onPhoto = if (!hasCamera) null else { { scanning = true } },
                 modifier = content,
             )
 
@@ -391,6 +375,15 @@ fun ScanScreen(
                 onDismiss = { letterFor = null },
             )
         }
+    }
+    if (scanning) {
+        CameraScan(
+            pagesSoFar = ui.photoPages,
+            onCaptured = { uri -> viewModel.import(uri, photo = true) { deleteScannedPage(context, uri) } },
+            onDone = { scanning = false },
+            onClose = { scanning = false },
+        )
+    }
     }
 }
 
@@ -1547,7 +1540,3 @@ private fun Ask(ask: String, modifier: Modifier = Modifier) {
         )
     }
 }
-
-/** Where the camera app writes a page. One file, reused and deleted after each read. */
-private fun pagePhoto(context: android.content.Context): File =
-    File(context.cacheDir, "pages").apply { mkdirs() }.resolve("page.jpg")
