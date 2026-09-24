@@ -87,6 +87,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -111,6 +113,7 @@ fun ScanScreen(
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val activity = remember(context) { context.findActivity() }
     val snackbar = remember { SnackbarHostState() }
 
@@ -207,6 +210,7 @@ fun ScanScreen(
                 onBack = viewModel::back,
                 onShare = { context.startActivity(shareReport(state)) },
                 onLetter = { Report.letter(state)?.let { context.startActivity(shareLetter(it)) } },
+                onShareCount = { scope.launch { context.startActivity(shareCardIntent(context, state)) } },
                 onChecks = { showChecks = true },
                 modifier = content,
             )
@@ -340,6 +344,7 @@ private fun Results(
     onBack: () -> Unit,
     onShare: () -> Unit,
     onLetter: () -> Unit,
+    onShareCount: () -> Unit,
     onChecks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -376,7 +381,7 @@ private fun Results(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Summary(state, locked = !unlocked && state.sellable) }
+            item { Summary(state, locked = !unlocked && state.sellable, onShareCount = onShareCount) }
 
             if (!state.looksLikeLease) {
                 item { NotALeaseNotice() }
@@ -569,7 +574,7 @@ private fun BottomBar(content: @Composable () -> Unit) {
  * as a label rather than as a result.
  */
 @Composable
-private fun Summary(state: ScanState.Scanned, locked: Boolean) {
+private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () -> Unit) {
     val hero = LocalHero.current
     val flagged = state.flaggedClauses
     val heading = when {
@@ -642,6 +647,26 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = hero.muted,
                 )
+
+                // Free, locked or not. It carries the count and nothing from the lease,
+                // so there is nothing in it to sell and no reason to hold it back.
+                if (ShareCardText.offered(state)) {
+                    Surface(
+                        onClick = onShareCount,
+                        shape = MaterialTheme.shapes.small,
+                        color = hero.content.copy(alpha = 0.10f),
+                        contentColor = hero.content,
+                    ) {
+                        Row(
+                            modifier = Modifier.heightIn(min = 44.dp).padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(RedlineIcons.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text("Share the count, not the lease", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
             }
         }
     }
