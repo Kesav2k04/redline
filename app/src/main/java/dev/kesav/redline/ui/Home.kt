@@ -1,19 +1,21 @@
 package dev.kesav.redline.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -53,36 +55,32 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.border
-import androidx.compose.animation.core.Animatable
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.unit.dp
 import dev.kesav.redline.Scanner
+import kotlin.math.roundToInt
 
 /**
  * The first screen, in three states: choosing how the lease comes in, waiting while a
@@ -147,6 +145,13 @@ internal fun Editor(
     }
 }
 
+/**
+ * Above this the two-column layouts become single columns. At twice the default size a
+ * word like "Paste" is wider than half a phone, and a grid of broken words is worse than
+ * a list of whole ones.
+ */
+private const val LARGE_TEXT = 1.3f
+
 @Composable
 private fun Start(
     price: String?,
@@ -161,103 +166,143 @@ private fun Start(
 
     // Three things this column has to survive: a short phone, a reader at 200% font
     // scale, and a landscape window. It scrolls rather than squeezing, so nothing is cut.
+    // On a 1179x2556 phone at 420dpi the promise, the headline and all three ways in sit
+    // above the fold; what it looks for starts just under them.
     val scroll = rememberScrollState()
     Column(
         modifier = modifier
             .fillMaxSize()
             .fadeTopEdge { scroll.value.toFloat() }
             .verticalScroll(scroll)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = Space.l, vertical = Space.s),
     ) {
-        // Space between groups is larger than space inside them, so the screen reads as
-        // promise, ways in, what it checks, then the sample, and not as one long list.
         Promise()
 
-        Text(
-            text = "Start with your lease",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 24.dp, bottom = 12.dp, start = 4.dp).semantics { heading() },
+        Eyebrow(
+            "Start with your lease",
+            modifier = Modifier
+                .padding(start = Space.xs, top = Space.xl, bottom = Space.m)
+                .semantics { heading() },
         )
+        WaysIn(onOpen = onOpen, onPhoto = onPhoto, onPaste = { onPaste(clipboard.getText()?.text) })
 
-        // The PDF is the common case: a lease is emailed far more often than it is
-        // handed over on paper, so it gets the one filled tile on the screen.
-        Tile(
-            icon = RedlineIcons.Document,
-            title = "Open the PDF",
-            detail = "The file your landlord or agent sent",
-            onClick = onOpen,
-            filled = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // Space between groups is larger than space inside them, so the screen reads as
+        // promise, ways in, what it checks, then the sample, and not as one long list.
+        Spacer(Modifier.height(Space.xxl))
+        LooksFor(onChecks)
+        Spacer(Modifier.height(Space.m))
+        Sample(onSample)
+        Spacer(Modifier.height(Space.l))
+        PriceLine(price)
+        Spacer(Modifier.height(Space.l))
+    }
+}
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+/**
+ * The three ways a lease arrives, as one grid.
+ *
+ * The PDF is the common case, since a lease is emailed far more often than it is handed
+ * over on paper, so it takes the tall filled tile and the other two stack beside it: the
+ * size of each tile is how likely it is to be the one the reader wants. Red belongs to that
+ * one tile only. The others were once pink badges with red icons, which made red mean "a
+ * tile" instead of "look here".
+ */
+@Composable
+private fun WaysIn(onOpen: () -> Unit, onPhoto: (() -> Unit)?, onPaste: () -> Unit) {
+    if (LocalDensity.current.fontScale > LARGE_TEXT) {
+        Column(verticalArrangement = Arrangement.spacedBy(Space.m)) {
+            Way(RedlineIcons.Document, "Open a PDF", "The file your landlord or agent sent", onOpen, Modifier.fillMaxWidth(), filled = true)
+            if (onPhoto != null) Way(RedlineIcons.Camera, "Scan paper", "Page by page", onPhoto, Modifier.fillMaxWidth())
+            Way(RedlineIcons.Paste, "Paste text", "Mail or chat", onPaste, Modifier.fillMaxWidth())
+        }
+        return
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(Space.m),
+    ) {
+        Pdf(onOpen, Modifier.weight(1f).fillMaxHeight())
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
             if (onPhoto != null) {
-                Tile(
-                    icon = RedlineIcons.Camera,
-                    title = "Photograph it",
-                    detail = "Paper copy, a page at a time",
-                    onClick = onPhoto,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    stacked = true,
+                Way(RedlineIcons.Camera, "Scan paper", "Page by page", onPhoto, Modifier.fillMaxWidth().weight(1f))
+            }
+            Way(RedlineIcons.Paste, "Paste text", "Mail or chat", onPaste, Modifier.fillMaxWidth().weight(1f))
+        }
+    }
+}
+
+/** The tall tile: the badge at the top, the words at the foot, and the tile itself the button. */
+@Composable
+private fun Pdf(onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    KitCard(
+        onClick = onOpen,
+        color = scheme.primary,
+        contentColor = scheme.onPrimary,
+        border = null,
+        modifier = modifier,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(RedlineIcons.Document, tint = scheme.onPrimary, size = 48.dp, container = scheme.onPrimary.copy(alpha = 0.16f))
+            Spacer(Modifier.weight(1f))
+            Icon(RedlineIcons.Chevron, contentDescription = null, tint = scheme.onPrimary.copy(alpha = 0.7f))
+        }
+        Spacer(Modifier.height(Space.l))
+        Spacer(Modifier.weight(1f))
+        Text("Open a PDF", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(Space.xs))
+        Text(
+            "The file your landlord or agent sent",
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onPrimary.copy(alpha = 0.82f),
+        )
+    }
+}
+
+/**
+ * One way in, as a row: badge, then the name and a line saying what it means. A tile
+ * rather than a button because "Open a PDF" alone does not tell a reader it means the
+ * file the landlord sent.
+ */
+@Composable
+private fun Way(
+    icon: ImageVector,
+    title: String,
+    detail: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    filled: Boolean = false,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val content = if (filled) scheme.onPrimary else scheme.onSurface
+    KitCard(
+        onClick = onClick,
+        color = if (filled) scheme.primary else scheme.surfaceContainer,
+        contentColor = content,
+        border = if (filled) null else scheme.outlineVariant,
+        modifier = modifier,
+    ) {
+        Spacer(Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(
+                icon,
+                tint = content,
+                container = if (filled) scheme.onPrimary.copy(alpha = 0.16f) else scheme.onSurface.copy(alpha = 0.07f),
+            )
+            Spacer(Modifier.width(Space.m))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (filled) content.copy(alpha = 0.82f) else scheme.onSurfaceVariant,
                 )
             }
-            Tile(
-                icon = RedlineIcons.Paste,
-                title = "Paste text",
-                detail = "Copied from mail or a chat",
-                onClick = { onPaste(clipboard.getText()?.text) },
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                stacked = true,
-            )
         }
-
-        Spacer(Modifier.height(32.dp))
-
-        LooksFor(onChecks)
-
-        Spacer(Modifier.height(12.dp))
-
-        // A document, not a sparkle: the sparkle is the stock glyph for "an AI feature",
-        // and the case this app makes is that nothing here is a model guessing.
-        Tile(
-            icon = RedlineIcons.Document,
-            title = "No lease to hand? Open a sample lease",
-            detail = null,
-            onClick = onSample,
-            quiet = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // The price belongs on this screen, not only on the paywall. Reading a lease in
-        // is work, and learning the cost only after doing that work is the shape of an
-        // ambush even when the number is small. The offering loads over the network and
-        // lands after the first frame, so the sentence reads properly without it.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                RedlineIcons.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "The scan, the score and the count are free. The full report starts at " +
-                    (price?.let { "a one-time $it." } ?: "a one-time payment."),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Spacer(Modifier.weight(1f))
     }
 }
 
@@ -276,10 +321,8 @@ private fun LooksFor(onChecks: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val spoken = "What it looks for: " + Scanner.topics.joinToString(", ") { it.name.lowercase() } +
         ". ${Scanner.ruleCount} checks."
-    Surface(
+    KitCard(
         onClick = onChecks,
-        shape = MaterialTheme.shapes.large,
-        color = scheme.surfaceContainerLowest,
         modifier = Modifier
             .fillMaxWidth()
             .clearAndSetSemantics {
@@ -287,33 +330,110 @@ private fun LooksFor(onChecks: () -> Unit) {
                 onClick(label = "open the list") { onChecks(); true }
             },
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("What it looks for", style = MaterialTheme.typography.titleMedium)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                for (topic in Scanner.topics) {
-                    Text(
-                        topic.name,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = scheme.onSurface,
-                        modifier = Modifier
-                            .border(1.dp, scheme.outlineVariant, MaterialTheme.shapes.small)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                    )
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(RedlineIcons.Checks, tint = scheme.onSurface, container = scheme.onSurface.copy(alpha = 0.07f))
+            Spacer(Modifier.width(Space.m))
+            Column(Modifier.weight(1f)) {
+                Text("What it looks for", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "See all ${Scanner.ruleCount} checks",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = scheme.primary,
-                    modifier = Modifier.weight(1f),
+                    "${Scanner.topics.size} subjects, ${Scanner.ruleCount} checks",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
                 )
-                Icon(RedlineIcons.Chevron, contentDescription = null, tint = scheme.primary)
             }
         }
+        Spacer(Modifier.height(Space.l))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Space.s),
+            verticalArrangement = Arrangement.spacedBy(Space.s),
+        ) {
+            for (topic in Scanner.topics) {
+                Text(
+                    topic.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurface,
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .background(scheme.surfaceContainerHighest)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(Space.l))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "See all ${Scanner.ruleCount} checks",
+                style = MaterialTheme.typography.labelLarge,
+                color = scheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(RedlineIcons.Chevron, contentDescription = null, tint = scheme.primary)
+        }
+    }
+}
+
+/**
+ * The sample, as the quietest thing on the screen: an outline and no fill. It is for the
+ * reader with no lease to hand, and it should never be mistaken for the way in.
+ */
+@Composable
+private fun Sample(onSample: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    // A document, not a sparkle: the sparkle is the stock glyph for "an AI feature", and
+    // the case this app makes is that nothing here is a model guessing.
+    KitCard(
+        onClick = onSample,
+        color = Color.Transparent,
+        padding = Space.m,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(RedlineIcons.Documents, tint = scheme.onSurfaceVariant, size = 36.dp)
+            Spacer(Modifier.width(Space.m))
+            Text(
+                "No lease to hand? Open a sample lease",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(RedlineIcons.Chevron, contentDescription = null, tint = scheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * The price belongs on this screen, not only on the paywall. Reading a lease in is work,
+ * and learning the cost only after doing that work is the shape of an ambush even when the
+ * number is small. The offering loads over the network and lands after the first frame, so
+ * the sentence reads properly without it. The price is set as a figure, like every other
+ * number the app states.
+ */
+@Composable
+private fun PriceLine(price: String?) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.xs, vertical = Space.s),
+        horizontalArrangement = Arrangement.spacedBy(Space.s),
+    ) {
+        Icon(
+            RedlineIcons.Lock,
+            contentDescription = null,
+            modifier = Modifier.padding(top = 3.dp).size(16.dp),
+            tint = scheme.onSurfaceVariant,
+        )
+        Text(
+            text = buildAnnotatedString {
+                append("The scan, the score and the count are free. The full report starts at ")
+                if (price != null) {
+                    append("a one-time ")
+                    withStyle(FigureStyle.toSpanStyle().copy(color = scheme.onSurface)) { append(price) }
+                    append(".")
+                } else {
+                    append("a one-time payment.")
+                }
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -321,35 +441,43 @@ private fun LooksFor(onChecks: () -> Unit) {
  * What the app does and what it will not do, before anything is asked of the reader.
  *
  * "Nothing is uploaded" used to be a grey sentence under the instructions. It is the
- * reason to use this rather than pasting a lease into a chatbot, so it is set as large
- * as the promise itself, on the one dark panel the eye lands on first.
+ * reason to use this rather than pasting a lease into a chatbot, so it sits on the
+ * masthead beside the name, on the one dark panel the eye lands on first. The panel is
+ * held to the hero, the headline and one sentence, so the ways in still reach the first
+ * screen underneath it.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Promise() {
     val hero = LocalHero.current
+    val large = LocalDensity.current.fontScale > LARGE_TEXT
     Surface(
         color = hero.container,
         contentColor = hero.content,
         shape = MaterialTheme.shapes.extraLarge,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.padding(Space.gutter)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .size(width = 4.dp, height = 20.dp)
-                        .background(hero.accent, RoundedCornerShape(2.dp))
+                        .size(width = 4.dp, height = 18.dp)
+                        .background(hero.accent, RoundedCornerShape(2.dp)),
                 )
                 Text(
                     text = "Redline",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 10.dp).weight(1f),
                 )
+                if (!large) Assurances()
+            }
+            if (large) {
+                Spacer(Modifier.height(Space.s))
+                Assurances()
             }
 
-            LeaseHero(Modifier.padding(vertical = 4.dp))
+            LeaseHero(Modifier.padding(top = Space.s))
 
+            Spacer(Modifier.height(Space.m))
             RedlinedHeadline(
                 before = "Find the clauses that ",
                 marked = "cost you money",
@@ -357,24 +485,41 @@ private fun Promise() {
                 color = hero.content,
                 mark = hero.accent,
             )
-
+            Spacer(Modifier.height(Space.m))
             Text(
                 text = "Before you sign, on your own phone. The lease is never uploaded, " +
                     "and there is no account.",
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = hero.muted,
             )
-
-            // Plain lines, not chips: they state facts and do nothing when tapped, and a
-            // filled shape the size of a button promises a tap it cannot keep.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Assurance(RedlineIcons.Shield, "On this phone")
-                Assurance(RedlineIcons.Offline, "Works offline")
-            }
         }
+    }
+}
+
+/**
+ * Plain marks, not chips: they state facts and do nothing when tapped, and a filled shape
+ * the size of a button promises a tap it cannot keep.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Assurances() {
+    // Wraps as whole marks, so large text moves "Offline" to its own line instead of
+    // breaking it after the N.
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(Space.m),
+        verticalArrangement = Arrangement.spacedBy(Space.xs),
+    ) {
+        Assurance(RedlineIcons.ShieldCheck, "On this phone")
+        Assurance(RedlineIcons.Offline, "Offline")
+    }
+}
+
+@Composable
+private fun Assurance(icon: ImageVector, label: String) {
+    val hero = LocalHero.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = hero.accent)
+        Eyebrow(label, color = hero.muted)
     }
 }
 
@@ -441,102 +586,11 @@ private fun RedlinedHeadline(before: String, marked: String, after: String, colo
     )
 }
 
-@Composable
-private fun Assurance(icon: ImageVector, label: String) {
-    val hero = LocalHero.current
-    Row(
-        modifier = Modifier.padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = hero.accent)
-        Text(label, style = MaterialTheme.typography.labelLarge, color = hero.muted)
-    }
-}
-
-/**
- * One way in. A tile rather than a button because each carries a line of explanation,
- * and "Open the PDF" alone does not tell a reader it means the file the landlord sent.
- */
-@Composable
-private fun Tile(
-    icon: ImageVector,
-    title: String,
-    detail: String?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    filled: Boolean = false,
-    stacked: Boolean = false,
-    quiet: Boolean = false,
-) {
-    val scheme = MaterialTheme.colorScheme
-    val container = when {
-        filled -> scheme.primary
-        quiet -> Color.Transparent
-        else -> scheme.surfaceContainerLowest
-    }
-    val content = if (filled) scheme.onPrimary else scheme.onSurface
-    // Red belongs to the one tile that is the common case. The others were pink badges
-    // with red icons, which made red mean "a tile" instead of "look here".
-    val badge = if (filled) scheme.onPrimary.copy(alpha = 0.16f) else scheme.secondaryContainer
-    val badgeTint = if (filled) scheme.onPrimary else scheme.onSecondaryContainer
-
-    val press = remember { MutableInteractionSource() }
-    Surface(
-        onClick = onClick,
-        shape = MaterialTheme.shapes.large,
-        color = container,
-        contentColor = content,
-        border = if (quiet) BorderStroke(1.dp, scheme.outlineVariant) else null,
-        interactionSource = press,
-        modifier = modifier.pressScale(press).heightIn(min = 56.dp),
-    ) {
-        val iconBox = @Composable {
-            Box(
-                modifier = Modifier
-                    .size(if (quiet) 36.dp else 48.dp)
-                    .background(badge, RoundedCornerShape(if (quiet) 10.dp else 14.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, tint = badgeTint, modifier = Modifier.size(if (quiet) 20.dp else 24.dp))
-            }
-        }
-        val words = @Composable { m: Modifier ->
-            Column(m, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                if (detail != null) {
-                    Text(
-                        detail,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (filled) content.copy(alpha = 0.82f) else scheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        if (stacked) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                iconBox()
-                words(Modifier)
-            }
-        } else {
-            Row(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = if (quiet) 12.dp else 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                iconBox()
-                words(Modifier.weight(1f))
-                Icon(RedlineIcons.Chevron, contentDescription = null, tint = content.copy(alpha = 0.6f))
-            }
-        }
-    }
-}
-
 /**
  * Waiting on a PDF or a photo. A sheet on a desk with a red pen line reading down it, the
  * lines above the pen darkening as they are read, because the wait is the app reading and
- * a spinner says nothing about what it is waiting for.
+ * a spinner says nothing about what it is waiting for. The sheet is drawn like the pages in
+ * the hero, heading bar and red margin rule, so the wait looks like the same lease arriving.
  */
 @Composable
 private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifier) {
@@ -554,16 +608,16 @@ private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifie
     } else {
         progress ?: 0.5f
     }
-    val done by animateFloatAsState(progress ?: 0f, motion(RedlineMotion.effects()), label = "done")
 
     Column(
-        modifier = modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+        modifier = modifier.fillMaxSize().padding(Space.xl),
+        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        val sheet = MaterialTheme.shapes.medium
         Box(
             Modifier
-                .size(width = 132.dp, height = 172.dp)
+                .size(width = 140.dp, height = 184.dp)
                 // Tipped back like a page lying in front of the reader. It holds still; only
                 // the pen moves.
                 .graphicsLayer {
@@ -571,34 +625,48 @@ private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifie
                     cameraDistance = 16f * density
                     transformOrigin = TransformOrigin(0.5f, 1f)
                 }
-                .clip(MaterialTheme.shapes.medium)
-                .background(scheme.surfaceContainerLowest)
+                .clip(sheet)
+                .background(scheme.surfaceContainer)
+                .border(1.dp, scheme.outlineVariant, sheet)
                 .drawBehind {
                     val pad = 18.dp.toPx()
-                    val gap = 14.dp.toPx()
+                    val gap = 13.dp.toPx()
+                    val bar = 5.dp.toPx()
                     val pen = size.height * sweep
                     // In over the first tenth of a pass and out over the last, so the jump
                     // back to the top happens while nothing is drawn. The read lines fade
                     // back with it rather than snapping to unread.
                     val ink = if (moving) (minOf(sweep, 1f - sweep) / 0.1f).coerceIn(0f, 1f) else 1f
                     val read = lerp(scheme.outlineVariant, scheme.onSurfaceVariant, ink)
-                    var y = pad + 6.dp.toPx()
+                    drawLine(
+                        color = scheme.primary.copy(alpha = 0.35f),
+                        start = Offset(pad - 7.dp.toPx(), pad),
+                        end = Offset(pad - 7.dp.toPx(), size.height - pad),
+                        strokeWidth = 1.dp.toPx(),
+                    )
+                    drawRoundRect(
+                        color = if (pad < pen) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        topLeft = Offset(pad, pad),
+                        size = Size((size.width - pad * 2) * 0.6f, bar * 1.6f),
+                        cornerRadius = CornerRadius(bar),
+                    )
+                    var y = pad + bar * 1.6f + gap
                     var i = 0
                     while (y < size.height - pad) {
                         val w = (size.width - pad * 2) * if (i % 4 == 3) 0.55f else 1f
                         drawRoundRect(
                             color = if (y < pen) read else scheme.outlineVariant,
                             topLeft = Offset(pad, y),
-                            size = Size(w, 5.dp.toPx()),
-                            cornerRadius = CornerRadius(3.dp.toPx()),
+                            size = Size(w, bar),
+                            cornerRadius = CornerRadius(bar / 2),
                         )
                         y += gap
                         i++
                     }
-                    val trail = 24.dp.toPx()
+                    val trail = 28.dp.toPx()
                     drawRect(
                         brush = Brush.verticalGradient(
-                            listOf(Color.Transparent, scheme.primary.copy(alpha = 0.18f * ink)),
+                            listOf(Color.Transparent, scheme.primary.copy(alpha = 0.2f * ink)),
                             startY = pen - trail,
                             endY = pen,
                         ),
@@ -608,27 +676,41 @@ private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifie
                     drawRect(
                         color = scheme.primary.copy(alpha = ink),
                         topLeft = Offset(0f, pen),
-                        size = Size(size.width, 3.dp.toPx()),
+                        size = Size(size.width, 2.dp.toPx()),
                     )
                 },
         )
+        Spacer(Modifier.height(Space.xxl))
         Text(
             text = step,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
+        Spacer(Modifier.height(Space.l))
         // A count when there is one to give. A photo is one step with no parts to count.
-        val bar = Modifier.width(180.dp).clip(RoundedCornerShape(2.dp))
         if (progress != null) {
-            LinearProgressIndicator(progress = { done }, modifier = bar)
+            Meter(
+                value = (progress * 100).roundToInt(),
+                color = scheme.primary,
+                modifier = Modifier.width(200.dp),
+            )
         } else {
-            LinearProgressIndicator(modifier = bar)
+            LinearProgressIndicator(
+                modifier = Modifier.width(200.dp).height(6.dp),
+                color = scheme.primary,
+                trackColor = scheme.outlineVariant,
+                strokeCap = StrokeCap.Round,
+            )
         }
-        Text(
-            text = "Read on this phone. Nothing leaves it.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-        )
+        Spacer(Modifier.height(Space.xl))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            Icon(RedlineIcons.ShieldCheck, contentDescription = null, modifier = Modifier.size(16.dp), tint = scheme.primary)
+            Text(
+                text = "Read on this phone. Nothing leaves it.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -636,6 +718,10 @@ private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifie
  * The lease, ready to scan. The text stays editable, because text recognition gets the
  * odd word wrong and the reader should be able to fix a misread "10" before being told
  * what it costs them.
+ *
+ * It is set as a document, in the serif the report quotes it in, on a sheet with the same
+ * red margin rule as the pages in the hero: what the reader is looking at is their lease,
+ * not a text box in an app.
  */
 @Composable
 private fun Document(
@@ -653,10 +739,11 @@ private fun Document(
     val scheme = MaterialTheme.colorScheme
     val focus = remember { FocusRequester() }
     LaunchedEffect(focusOnOpen) { if (focusOnOpen) focus.requestFocus() }
+    val words = remember(text) { text.split(WHITESPACE).count { it.isNotEmpty() } }
 
     Column(modifier = modifier.fillMaxSize().imePadding()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = Space.xs, end = Space.l, top = Space.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onStartOver) {
@@ -677,7 +764,7 @@ private fun Document(
                     contentColor = scheme.onPrimaryContainer,
                 ) {
                     Row(
-                        modifier = Modifier.heightIn(min = 40.dp).padding(horizontal = 12.dp),
+                        modifier = Modifier.heightIn(min = 40.dp).padding(horizontal = Space.m),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
@@ -690,11 +777,11 @@ private fun Document(
 
         if (source != null) {
             Row(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = Space.gutter, vertical = Space.xs),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Space.s),
             ) {
-                Icon(RedlineIcons.Shield, contentDescription = null, modifier = Modifier.size(16.dp), tint = scheme.primary)
+                Icon(RedlineIcons.ShieldCheck, contentDescription = null, modifier = Modifier.size(16.dp), tint = scheme.primary)
                 Text(
                     source,
                     style = MaterialTheme.typography.bodySmall,
@@ -705,36 +792,57 @@ private fun Document(
             }
         }
 
-        Surface(
-            color = scheme.surfaceContainerLowest,
-            shape = MaterialTheme.shapes.large,
+        val sheet = MaterialTheme.shapes.large
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = Space.l, vertical = Space.s)
+                .clip(sheet)
+                .background(scheme.surfaceContainer)
+                .border(1.dp, scheme.outlineVariant, sheet),
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.m),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Eyebrow("Lease text", modifier = Modifier.weight(1f))
+                if (words > 0) Eyebrow(if (words == 1) "1 word" else "%,d words".format(words))
+            }
+            val body = MaterialTheme.typography.bodyLarge.copy(fontFamily = RedlineFonts.Serif)
             TextField(
                 value = text,
                 onValueChange = onText,
-                placeholder = { Text("Paste or type the lease here") },
-                textStyle = QuoteStyle.copy(color = scheme.onSurface),
+                placeholder = { Text("Paste or type the lease here", style = body) },
+                textStyle = body.copy(color = scheme.onSurface),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
+                    focusedPlaceholderColor = scheme.onSurfaceVariant,
+                    unfocusedPlaceholderColor = scheme.onSurfaceVariant,
                 ),
                 modifier = Modifier
                     .fillMaxSize()
+                    .drawBehind {
+                        // The margin rule of a printed page, just inside the text's left edge.
+                        val x = 9.dp.toPx()
+                        drawLine(
+                            color = scheme.primary.copy(alpha = 0.3f),
+                            start = Offset(x, 12.dp.toPx()),
+                            end = Offset(x, size.height - 12.dp.toPx()),
+                            strokeWidth = 1.dp.toPx(),
+                        )
+                    }
                     .focusRequester(focus)
                     .semantics { contentDescription = "Lease text" },
             )
         }
 
         Column(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.xs, bottom = Space.m),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // Never disabled. A dead button told a TalkBack reader nothing about why it did
             // not respond; a tap on an empty field now says what is missing.
@@ -754,14 +862,16 @@ private fun Document(
                 interactionSource = press,
                 modifier = Modifier.verdict().pressScale(press).fillMaxWidth().heightIn(min = 56.dp),
             ) {
+                Icon(RedlineIcons.Scanner, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(Space.s))
                 Text("Scan", style = MaterialTheme.typography.labelLarge)
             }
             if (empty && text.isBlank()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Space.s),
                     modifier = Modifier
-                        .padding(top = 4.dp)
+                        .padding(top = Space.s)
                         .semantics { liveRegion = LiveRegionMode.Polite },
                 ) {
                     Box(Modifier.size(6.dp).background(scheme.primary, RoundedCornerShape(3.dp)))
@@ -777,12 +887,14 @@ private fun Document(
                     "Runs all ${Scanner.ruleCount} checks on this phone",
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                    modifier = Modifier.padding(horizontal = Space.s, vertical = Space.m),
                 )
             }
         }
     }
 }
+
+private val WHITESPACE = Regex("""\s+""")
 
 /** The quoted-clause block: a document excerpt with a red rule down its margin. */
 @Composable
