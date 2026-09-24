@@ -130,7 +130,7 @@ internal fun MoneyCard(exposure: Exposure, locked: Boolean, modifier: Modifier =
                 Column(Modifier.weight(1f).padding(start = Space.m, end = Space.m)) {
                     Text(cost.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Text(
-                        text = if (locked) "Clause ${cost.clauseIndex + 1}. The working is in the full report." else cost.basis,
+                        text = if (locked) "Which clause, and the working, are in the full report." else cost.basis,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

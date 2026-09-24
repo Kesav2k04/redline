@@ -26,6 +26,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import java.io.File
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -577,6 +578,11 @@ internal fun Results(
         }
     }
 
+    // The first card opens by itself; the rest wait folded, so the list reads as an index of
+    // headlines the reader opens one at a time. Kept across rotation.
+    var open by rememberSaveable(state) { mutableStateOf(listOfNotNull(state.groups.firstOrNull()?.clause?.index)) }
+    val toggle: (Int) -> Unit = { i -> open = if (i in open) open - i else open + i }
+
     // Cards in the first screenful rise in once; anything scrolled to later just appears.
     val settled = remember(state) { mutableStateOf(!moving) }
     LaunchedEffect(state) {
@@ -709,7 +715,13 @@ internal fun Results(
                 // of six readers took the bars for a broken app and tapped them.
                 state.groups.firstOrNull()?.let { first ->
                     item(key = "clause-${first.clause.index}") {
-                        ClauseCard(first, Modifier.entrance(0, settled.value).animateItem())
+                        ClauseCard(
+                            first,
+                            Modifier.entrance(0, settled.value).animateItem(),
+                            expanded = first.clause.index in open,
+                            onToggle = { toggle(first.clause.index) },
+                            onView = { onDocument(first.clause.index) },
+                        )
                     }
                     if (showPlace) placeItem()
                 }
@@ -740,6 +752,9 @@ internal fun Results(
                                     placementSpec = motion(RedlineMotion.spatial()),
                                 ),
                             drawMark = revealing,
+                            expanded = group.clause.index in open,
+                            onToggle = { toggle(group.clause.index) },
+                            onView = { onDocument(group.clause.index) },
                         )
                     }
                 }
@@ -1313,11 +1328,19 @@ internal fun severityWord(severity: Severity): String = when (severity) {
 }
 
 @Composable
-private fun ClauseCard(group: ClauseGroup, modifier: Modifier = Modifier, drawMark: Boolean = false) {
+private fun ClauseCard(
+    group: ClauseGroup,
+    modifier: Modifier = Modifier,
+    drawMark: Boolean = false,
+    expanded: Boolean = true,
+    onToggle: (() -> Unit)? = null,
+    onView: (() -> Unit)? = null,
+) {
     val count = group.findings.size
     val problems = if (count == 1) "1 problem" else "$count problems"
     val scheme = MaterialTheme.colorScheme
     val mark = if (group.worst == Severity.HIGH) scheme.primary else scheme.tertiary
+    val haptics = LocalHapticFeedback.current
 
     // The clause text belongs in here. Leaving it out told a screen reader that a costly
     // clause existed and what it was called, then withheld the sentence the whole app
@@ -1339,22 +1362,55 @@ private fun ClauseCard(group: ClauseGroup, modifier: Modifier = Modifier, drawMa
     LaunchedEffect(Unit) {
         if (markDrawn.value < 1f) markDrawn.animateTo(1f, tween(280, delayMillis = 120, easing = RedlineMotion.Decelerate))
     }
+    val turn by androidx.compose.animation.core.animateFloatAsState(
+        if (expanded) 180f else 0f, motion(RedlineMotion.expand()), label = "chevron",
+    )
+    val press = remember { MutableInteractionSource() }
 
     Surface(
+        onClick = {
+            if (onToggle != null) {
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                onToggle()
+            }
+        },
         color = scheme.surfaceContainerLowest,
         shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, scheme.outlineVariant),
+        interactionSource = press,
         modifier = modifier
             .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = spoken },
+            .pressScale(press)
+            .clearAndSetSemantics {
+                contentDescription = spoken
+                if (onToggle != null) {
+                    onClick(label = if (expanded) "fold the clause" else "open the clause") { onToggle(); true }
+                }
+            },
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            // Springs, so a card that opens under the finger overshoots a hair and settles, and
+            // an interrupted tap reverses from wherever the height has got to.
+            Modifier
+                .animateContentSize(motion(RedlineMotion.expand()))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SeverityMark(group.worst)
+                Spacer(Modifier.weight(1f))
                 Text(problems, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                if (onToggle != null) {
+                    Icon(
+                        RedlineIcons.Chevron,
+                        contentDescription = null,
+                        tint = scheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 6.dp).size(18.dp).graphicsLayer { rotationZ = 90f + turn },
+                    )
+                }
             }
 
             // The subject, in grey: the mark and the margin already carry the colour.
@@ -1381,19 +1437,42 @@ private fun ClauseCard(group: ClauseGroup, modifier: Modifier = Modifier, drawMa
                     .padding(start = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                for (f in group.findings) {
+                val shown = if (expanded) group.findings else group.findings.take(1)
+                for (f in shown) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(f.headline, style = MaterialTheme.typography.titleMedium)
-                        Text(f.reason, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                        if (f.ask.isNotBlank()) Ask(f.ask, Modifier.padding(top = 6.dp))
+                        if (expanded) {
+                            Text(f.reason, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                            if (f.ask.isNotBlank()) Ask(f.ask, Modifier.padding(top = 6.dp))
+                        }
                     }
+                }
+                if (!expanded && count > 1) {
+                    Text(
+                        if (count == 2) "and 1 more problem in this clause" else "and ${count - 1} more problems in this clause",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
                 }
             }
 
-            // Quoted once at the foot of the card, however many rules it tripped.
-            // Repeating the paragraph under every finding was read as padding the count
-            // rather than as thoroughness.
-            Quote(group.clause.text, Modifier.padding(top = 4.dp))
+            if (expanded) {
+                // Quoted once at the foot of the card, however many rules it tripped.
+                // Repeating the paragraph under every finding was read as padding the count
+                // rather than as thoroughness.
+                Quote(group.clause.text, Modifier.padding(top = 4.dp))
+                if (onView != null) {
+                    TextButton(
+                        onClick = onView,
+                        contentPadding = PaddingValues(horizontal = 0.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurface),
+                    ) {
+                        Icon(RedlineIcons.Eye, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("See it in the lease", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
         }
     }
 }
