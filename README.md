@@ -20,125 +20,20 @@ clause is free, in full, with the sentence it came from and what to ask for inst
 What the purchase buys is the other ten clauses and the eighteen problems inside them,
 the change to ask for on each, and a letter to the landlord that asks for all of them.
 
-## Why it works the way it does
+## In five lines
 
-The obvious build is on-device sentence embeddings: write out a bank of "costly clause"
-patterns, embed the lease, rank by cosine similarity. That was the plan.
-
-It was given a test it could fail, and it failed it.
-
-Thirty real lease clauses, twenty costly and ten benign, were labelled and committed
-**before** the archetypes existed, so the archetypes could not be shaped around the
-answers. Two pass conditions were fixed in advance: top-1 category correct on at least
-fourteen of twenty, and a true-positive margin at least three times the benign margin.
-
-| | Embeddings | Rules |
-|---|---|---|
-| Costly clauses identified | **8 / 20** | **20 / 20** |
-| Benign clauses left alone | 3 confident false flags | **10 / 10** |
-
-The interesting part is not that it scored badly. It is *how*. A benign sentence about
-paying your own electricity bill produced the second-highest confidence score in the
-entire set, higher than fourteen genuinely costly clauses. The failure mode was not
-missing bad clauses; it was confidently flagging harmless ones, which is worse than
-saying nothing when the reader is trying to decide whether to sign.
-
-So Redline extracts instead of guessing. It finds the actual number, checks it against a
-stated limit, and shows you the clause it came from. Every flag can be argued with.
-
-Full working, raw output and reproduction steps: [`eval/README.md`](eval/README.md).
-
-## What it catches
-
-Thirty-eight rules across late fees, deposits, repairs, lock-in periods, notice
-requirements, rent escalation, entry rights, occupancy limits, automatic renewal,
-deemed service, pass-through charges, legal costs, liability waivers and restoration
-costs. The first twenty-seven were written against Indian leases. Eleven more came from
-a set of US and English clauses, which took the scanner from 6 to 18 of 26 costly US
-clauses and from 3 to 13 of 19 English ones, with fewer false flags on both, and left
-every Indian result where it was. That set shaped the new rules, so it is a regression
-check rather than a measure of how far they reach.
-
-Each finding names the figure it found. "Deposit equal to ten months rent", not
-"deposit risk detected".
-
-### How well, measured
-
-| Set | Costly caught | Benign left alone |
-|---|---|---|
-| Frozen corpus, 30 clauses | 20 / 20 | 10 / 10 |
-| Held out, written after the rules | 4 / 5 | 5 / 5 |
-
-The held-out set uses deliberately different language (lessor and lessee, "demised
-premises", "surcharge") and none of it was available while the rules were written. The
-one miss is documented rather than patched, because editing a rule so a held-out clause
-passes turns it into a training clause.
-
-This is why the app says **"no rule matched"** and never "this lease is clean". Rules
-catch what they were written to catch, and when they miss they say nothing.
-
-### What those numbers were quietly hiding
-
-20 of 20 and 10 of 10 was believed for longer than it deserved. The benign half of that
-corpus was ten benign *lease* clauses. Nothing in it asked what the scanner does with
-text that is not a lease, which is close to the first thing a stranger with the app open
-will try.
-
-It did something embarrassing. Four off-topic documents were run through it and every one
-tripped a rule:
-
-| Pasted in | What it said |
-|---|---|
-| A recipe | "The landlord alone decides what to deduct" |
-| A privacy policy | "Staying on counts as agreeing" |
-| An employment offer | "Leaving early still costs you the rest of the term" |
-| A news story about parking charges | "Another occupant raises the rent by 10 percent" |
-
-Several rules match ordinary commercial English. "At its sole discretion" is in every
-employment offer written; "continued use constitutes acceptance" is in every privacy
-policy.
-
-The rules were not narrowed, because they are right about leases and bending them to
-dodge a recipe would cost real catches. The document is checked instead, once, in
-[`LeaseCheck.kt`](app/src/main/java/dev/kesav/redline/LeaseCheck.kt), which asks for two
-distinct words that only tenancies use. That is loose enough to accept a single clause
-shared in from another app and tight enough to reject all four documents above.
-
-One rule was later narrowed for a reason of its own. US leases say "sole discretion" about
-pets, sublets and alterations, where "the landlord alone decides what to deduct" is simply
-false, so the rule now needs a deduction or the deposit in the same clause. The recipe
-stopped tripping it as a side effect; the privacy policy and the job offer still trip
-others, so the check still earns its place.
-
-The first version of that list was too narrow in the other direction. An Indian leave and
-licence deed names a licensor and a licensee and never says landlord, and 9 of 24 real
-clauses in [`OnTopicTest`](app/src/test/java/dev/kesav/redline/OnTopicTest.kt) were told
-they were not a lease. Now 0 of 24 are. Licensor, licensee and licence count as one word
-rather than three, because "the Licensor grants the Licensee a licence to use the
-Software" would otherwise pass as a tenancy, and a test holds that line. Five clauses
-still fail, each with its reason written beside it.
-
-When the check fails the app says so, shows what matched anyway so the claim can be
-checked, and **does not offer to sell anything**. `OffTopicTest` pins all of it, including
-an assertion that the privacy policy and the job offer still trip rules, so the day the check stops
-earning its place the test says so rather than going quietly green.
-
-The second thing the corpus hid was inside real leases, and it was worse, because a lease
-passes the check above and the false headline then sits behind the paywall. No trigger
-word had a word boundary, and six of the seven rules that read a number took the first
-one in the clause. So "the rent shall be escalated by ten percent" came out as *Late
-payment penalty of 10 percent*: "late" sits inside "escalated", and the only percentage
-in the clause was read as the fee. "Residential" became a second occupant. An
-eleven-month term became a notice period.
-
-Every trigger now starts on a word boundary, and every rule that reads a number takes the
-one nearest a required anchor word, within a reach set per rule. A late fee has to sit
-within forty characters of *charge*, *fee*, *penalty* or *interest*; a notice period
-within forty of *notice*. [`AdversarialTest`](app/src/test/java/dev/kesav/redline/AdversarialTest.kt)
-holds the clauses built to break it, including one with two percentages where the late
-fee must come out as 4 and not 10, beside six plain clauses that must still fire. The
-frozen corpus scores the same 20 of 20 and 10 of 10 afterwards, which says less about
-the fix than it does about the corpus.
+- **What it does:** reads a lease on the phone (a PDF, a photo, a share or a paste) and flags
+  the clauses that could cost money, each with the figure it found, the sentence it came
+  from and what to ask for instead, naming the law for six places.
+- **Free:** the scan, the honest count, the first flagged clause in full, the subject of
+  every locked clause, all 38 checks, and the price.
+- **Paid, once:** one lifetime package through RevenueCat, behind the `full_report`
+  entitlement, priced from the offering: every other clause, the asks, a letter to the landlord and a PDF report.
+- **Restore without an account:** the purchase is keyed to a salted hash of the device ID,
+  so it comes back after an uninstall, checked on the release build.
+- **Measured, not assumed:** the rules were chosen over an embedding model on thirty
+  clauses labelled before either existed, and the tests include clauses built to break
+  them and documents that are not leases.
 
 ## Verify the monetization in 60 seconds
 
@@ -150,6 +45,13 @@ the fix than it does about the corpus.
   is offered something they already own.
 - The price on the button comes from the offering, not from a string in the code.
 - Cancelled purchases are not treated as errors.
+- An offline start does not strand the paywall. The offering is fetched again while the
+  paywall shows no price, and a tap on the button fetches it before giving up, so the
+  price arrives with the signal. An `UpdatedCustomerInfoListener` keeps the entitlement
+  current without waiting for a relaunch.
+- The line above the price can be changed from the dashboard without a release: set
+  `paywall_line` in the offering's metadata, and the app falls back to its own line when
+  it is absent.
 - The button sells a named package type, never `availablePackages.first()`. Reordering the
   offering in the dashboard, or a product failing to resolve and dropping out, would
   otherwise slide a subscription into that slot and quietly offer a recurring charge to
@@ -158,8 +60,8 @@ the fix than it does about the corpus.
 - `Billing.restore()` implements restore on reinstall, and it actually works after one.
   There are no accounts here, so the purchase is keyed to a SHA-256 hash of `ANDROID_ID`,
   which is scoped to the signing key and outlives the app's own storage. Automatic device
-  identifier collection is off, so what reaches RevenueCat is stable without being a device
-  identifier. `PurchaseIdTest` pins that the hash stays stable, because nothing else here
+  identifier collection is off, and what reaches RevenueCat is a salted hash, never the raw
+  ID. `PurchaseIdTest` pins that the hash stays stable, because nothing else here
   would notice if it stopped.
 - What the purchase buys is durable. `Report.letter` writes the landlord a request for
   each change, and `Report.build` turns the findings into plain text for anyone else, both
@@ -212,6 +114,75 @@ What is left to sell is the part that took the work: which clause, what it says,
 it costs money. One payment, no subscription, because a tenant signs a lease roughly
 once a year and billing them monthly for that would be the actual dark pattern.
 
+## Why it works the way it does
+
+The obvious build is on-device sentence embeddings: write out a bank of "costly clause"
+patterns, embed the lease, rank by cosine similarity. That was the plan.
+
+It was given a test it could fail, and it failed it.
+
+Thirty real lease clauses, twenty costly and ten benign, were labelled and committed
+**before** the archetypes existed, so the archetypes could not be shaped around the
+answers. Two pass conditions were fixed in advance: top-1 category correct on at least
+fourteen of twenty, and a true-positive margin at least three times the benign margin.
+
+| | Embeddings (Universal Sentence Encoder) | Rules |
+|---|---|---|
+| Costly clauses identified | **8 / 20** | **20 / 20** |
+| Benign clauses left alone | 3 confident false flags | **10 / 10** |
+
+The interesting part is not that it scored badly. It is *how*. A benign sentence about
+paying your own electricity bill produced the second-highest confidence score in the
+entire set, higher than fourteen genuinely costly clauses. The failure mode was not
+missing bad clauses; it was confidently flagging harmless ones, which is worse than
+saying nothing when the reader is trying to decide whether to sign.
+
+That model dates from 2018, and a newer one would score higher; the case for rules does
+not rest on this score. It rests on what rules give a reader and a model does not: the
+same answer every time, a quoted sentence behind every flag, and no cost per scan.
+
+So Redline extracts instead of guessing. It finds the actual number, checks it against a
+stated limit, and shows you the clause it came from. Every flag can be argued with.
+
+Full working, raw output and reproduction steps: [`eval/README.md`](eval/README.md).
+
+## What it catches
+
+Thirty-eight rules across late fees, deposits, repairs, lock-in periods, notice
+requirements, rent escalation, entry rights, occupancy limits, automatic renewal,
+deemed service, pass-through charges, legal costs, liability waivers and restoration
+costs. The first twenty-seven were written against Indian leases. Eleven more came from
+a set of US and English clauses, which took the scanner from 6 to 18 of 26 costly US
+clauses and from 3 to 13 of 19 English ones, with fewer false flags on both, and left
+every Indian result where it was. That set shaped the new rules, so it is a regression
+check rather than a measure of how far they reach.
+
+Each finding names the figure it found. "Deposit equal to ten months rent", not
+"deposit risk detected".
+
+### How well, measured
+
+| Set | Costly caught | Benign left alone |
+|---|---|---|
+| Frozen corpus, 30 clauses | 20 / 20 | 10 / 10 |
+| Held out, 10 clauses written after the rules | 4 / 5 | 5 / 5 |
+
+The held-out set uses deliberately different language (lessor and lessee, "demised
+premises", "surcharge") and none of it was available while the rules were written. The
+one miss is documented rather than patched, because editing a rule so a held-out clause
+passes turns it into a training clause.
+
+This is why the app says **"no rule matched"** and never "this lease is clean". Rules
+catch what they were written to catch, and when they miss they say nothing.
+
+### What those numbers were hiding
+
+The 20 of 20 hid two problems, both found by trying to break it and both fixed: text
+that is not a lease (a pasted recipe was told "the landlord alone decides what to
+deduct"), and rules reading the wrong number ("escalated" contains "late"). The full
+account, the fixes and the tests that pin them are in
+[`eval/README.md`](eval/README.md#what-the-corpus-was-hiding).
+
 ## Build
 
 Android SDK with platform 36, and a JDK 17 or newer.
@@ -228,9 +199,9 @@ services to sign up for, and no `local.properties` entries beyond `sdk.dir`. Ope
 folder in Android Studio writes that line for you; from a bare terminal, an `ANDROID_HOME`
 pointing at the SDK does the same job and the file can stay absent.
 
-The release APK is about 42 MB. Most of that is the on-device OCR model, shipped for three
-processor types, and code that R8 would normally shrink: the release build stays
-debuggable because RevenueCat's Test Store requires it.
+The release APK is about 40 MB, most of it the on-device OCR model for three processor
+types. While it uses RevenueCat's Test Store the release build has to be debuggable,
+which also keeps R8 from shrinking it; a Play Store key turns both back on.
 
 To exercise the purchase flow, add your own key:
 

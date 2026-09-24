@@ -159,3 +159,66 @@ Where each row came from is in its `origin` and `source` columns:
 - **reworded** (2 rows, `u39` and `u40`): these follow the Florida Supreme Court approved
   lease form, which states no licence, so the wording here is new and only the substance
   is the form's.
+
+## What the corpus was hiding
+
+20 of 20 and 10 of 10 was believed for longer than it deserved. The benign half of that
+corpus was ten benign *lease* clauses. Nothing in it asked what the scanner does with
+text that is not a lease, which is close to the first thing a stranger with the app open
+will try.
+
+It did something embarrassing. Four off-topic documents were run through it and every one
+tripped a rule:
+
+| Pasted in | What it said |
+|---|---|
+| A recipe | "The landlord alone decides what to deduct" |
+| A privacy policy | "Staying on counts as agreeing" |
+| An employment offer | "Leaving early still costs you the rest of the term" |
+| A news story about parking charges | "Another occupant raises the rent by 10 percent" |
+
+Several rules match ordinary commercial English. "At its sole discretion" is in every
+employment offer written; "continued use constitutes acceptance" is in every privacy
+policy.
+
+The rules were not narrowed, because they are right about leases and bending them to
+dodge a recipe would cost real catches. The document is checked instead, once, in
+[`LeaseCheck.kt`](../app/src/main/java/dev/kesav/redline/LeaseCheck.kt), which asks for two
+distinct words that only tenancies use. That is loose enough to accept a single clause
+shared in from another app and tight enough to reject all four documents above.
+
+One rule was later narrowed for a reason of its own. US leases say "sole discretion" about
+pets, sublets and alterations, where "the landlord alone decides what to deduct" is simply
+false, so the rule now needs a deduction or the deposit in the same clause. The recipe
+stopped tripping it as a side effect; the privacy policy and the job offer still trip
+others, so the check still earns its place.
+
+The first version of that list was too narrow in the other direction. An Indian leave and
+licence deed names a licensor and a licensee and never says landlord, and 9 of 24 real
+clauses in [`OnTopicTest`](../app/src/test/java/dev/kesav/redline/OnTopicTest.kt) were told
+they were not a lease. Now 0 of 24 are. Licensor, licensee and licence count as one word
+rather than three, because "the Licensor grants the Licensee a licence to use the
+Software" would otherwise pass as a tenancy, and a test holds that line. Five clauses
+still fail, each with its reason written beside it.
+
+When the check fails the app says so, shows what matched anyway so the claim can be
+checked, and **does not offer to sell anything**. `OffTopicTest` pins all of it, including
+an assertion that the privacy policy and the job offer still trip rules, so the day the check stops
+earning its place the test says so rather than going quietly green.
+
+The second thing the corpus hid was inside real leases, and it was worse, because a lease
+passes the check above and the false headline then sits behind the paywall. No trigger
+word had a word boundary, and six of the seven rules that read a number took the first
+one in the clause. So "the rent shall be escalated by ten percent" came out as *Late
+payment penalty of 10 percent*: "late" sits inside "escalated", and the only percentage
+in the clause was read as the fee. "Residential" became a second occupant. An
+eleven-month term became a notice period.
+
+Every trigger now starts on a word boundary, and every rule that reads a number takes the
+one nearest a required anchor word, within a reach set per rule. A late fee has to sit
+within forty characters of *charge*, *fee*, *penalty* or *interest*; a notice period
+within forty of *notice*. [`AdversarialTest`](../app/src/test/java/dev/kesav/redline/AdversarialTest.kt)
+holds the clauses built to break it, including one with two percentages where the late
+fee must come out as 4 and not 10, beside six plain clauses that must still fire. The
+frozen corpus scores the same 20 of 20 and 10 of 10 afterwards, which says less about
+the fix than it does about the corpus.

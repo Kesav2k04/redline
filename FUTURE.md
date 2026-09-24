@@ -51,8 +51,10 @@ document, and the strongest privacy promise is one the code enforces: the lease 
 touches the network. The only traffic is RevenueCat's, for the price and the purchase.
 
 **Cloud analysis or a language model.** It would cost money per scan, require sending
-somebody's lease to a server, and produce answers nobody can check. The measurement in
-`eval/` is the argument against the on-device version of the same idea.
+somebody's lease to a server, and produce answers nobody can check. An on-device model
+avoids the first two and not the third: the eval in `eval/` tested embeddings, not a
+language model, and the case against one here is that a flag has to point at a sentence
+and give the same answer twice, which rules do by construction.
 
 **A second embedding attempt with a larger model.** EmbeddingGemma separates far better
 than Universal Sentence Encoder, but the file is 183 MB and fetching it needs a licence
