@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.kesav.redline.ClauseSplitter
 import dev.kesav.redline.ScanState
@@ -56,10 +57,11 @@ class SemanticsTest {
     @Test
     fun `the locked index is one spoken sentence naming what is locked, and says what a tap does`() {
         report(unlocked = false)
-        scrollTo(3)
         val locked = state.groups.size - 1
-        compose.onNode(hasContentDescription("$locked more clauses, locked", substring = true))
-            .assertHasClickAction()
+        val index = hasContentDescription("$locked more clauses, locked", substring = true)
+        // The index sits below the report's sections, so scroll by what it says, not where it is.
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(index)
+        compose.onNode(index).assertHasClickAction()
         // Every subject is in that sentence, so nothing on screen is withheld from the ear.
         val first = state.groups.drop(1).first().findings.first().topic
         compose.onNode(hasContentDescription(first, substring = true)).assertHasClickAction()

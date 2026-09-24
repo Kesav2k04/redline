@@ -53,6 +53,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -243,9 +246,10 @@ private fun better(a: Double, b: Double): Int = when {
 @Composable
 private fun SideHead(side: Side, wins: Boolean, modifier: Modifier = Modifier) {
     val tint = risk.ofScore(side.score)
+    val hero = LocalHero.current
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.TopEnd) {
-            RiskRing(side.score, tint, Modifier.size(96.dp))
+            RiskRing(side.score, tint, Modifier.size(96.dp), track = hero.content.copy(alpha = 0.14f), caption = hero.muted)
             if (wins) {
                 Box(Modifier.size(26.dp).clip(CircleShape).background(risk.low), contentAlignment = Alignment.Center) {
                     Icon(RedlineIcons.Check, null, Modifier.size(18.dp), tint = Color.White)
@@ -285,7 +289,7 @@ private fun Value(text: String, wins: Boolean, modifier: Modifier, align: TextAl
     Row(modifier, horizontalArrangement = if (align == TextAlign.End) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.CenterVertically) {
         if (wins && align == TextAlign.End) WinDot()
         Text(
-            text,
+            figure(text),
             style = FigureStyle.copy(fontSize = 17.sp),
             color = if (wins) risk.low else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = 6.dp),
@@ -328,5 +332,13 @@ private fun Butterfly(label: String, left: Int, right: Int, leftColor: Color, ri
             if (wl > 0f) drawRoundRect(leftColor, Offset(mid - gap - wl, 0f), Size(wl, size.height), r)
             if (wr > 0f) drawRoundRect(rightColor, Offset(mid + gap, 0f), Size(wr, size.height), r)
         }
+    }
+}
+
+/** Digits stay in the mono figure face; the words around them ("of", "months") are set in sans. */
+private fun figure(text: String) = buildAnnotatedString {
+    for (part in Regex("""[0-9.,½]+|[^0-9.,½]+""").findAll(text)) {
+        val digits = part.value.first().isDigit() || part.value.first() == '½'
+        if (digits) append(part.value) else withStyle(SpanStyle(fontFamily = RedlineFonts.Sans, fontSize = 14.sp)) { append(part.value) }
     }
 }

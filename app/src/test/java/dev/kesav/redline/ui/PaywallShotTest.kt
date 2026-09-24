@@ -23,6 +23,7 @@ import com.revenuecat.purchases.models.TestStoreProduct
 import dev.kesav.redline.ClauseSplitter
 import dev.kesav.redline.Offer
 import dev.kesav.redline.Plan
+import dev.kesav.redline.SavedLease
 import dev.kesav.redline.ScanState
 import dev.kesav.redline.Scanner
 import java.io.File
@@ -98,5 +99,30 @@ class PaywallShotTest {
         compose.onRoot().captureRoboImage("build/shots/report-bento.png")
         compose.onAllNodes(hasScrollAction()).onFirst().performScrollToIndex(3)
         compose.onRoot().captureRoboImage("build/shots/report-money.png")
+    }
+
+    @Test
+    fun compare() {
+        val text = File("src/main/assets/sample_lease.txt").readText()
+        // A second flat with the same shape of lease but a fair deposit and no exit penalty.
+        val milder = """
+            RESIDENTIAL TENANCY AGREEMENT
+            1. Term. The tenancy runs for twelve months from the start date.
+            2. Rent. The rent is payable monthly in advance on the first day of each month.
+            3. Deposit. The Tenant shall pay a deposit equal to one month's rent, returned within thirty days of the end of the tenancy.
+            4. Repairs. The Landlord shall keep the structure, plumbing and wiring in repair.
+            5. Entry. The Landlord may enter the premises on twenty-four hours' written notice at a reasonable time.
+            6. Notice. Either party may end the tenancy after the first six months on two months' written notice.
+        """.trimIndent()
+        val saved = listOf(
+            SavedLease("b", "Flat on Park Road", 1L, milder, null),
+            SavedLease("a", "Sample lease", 2L, text, null),
+        )
+        screen { CompareScreen(current = sample(), currentId = "a", saved = saved, onBack = {}, onScanAnother = {}) }
+        // The rings and bars wait a beat before they fill, and a delay is not a frame, so
+        // waitForIdle alone would photograph them empty.
+        compose.mainClock.advanceTimeBy(3_000)
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/shots/compare.png")
     }
 }

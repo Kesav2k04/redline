@@ -469,14 +469,19 @@ private fun TileFigure(score: CategoryScore, tint: Color, large: Boolean = false
 
 /** A category's risk, 0 to 100, as a ring that fills on a spring, with the number inside. */
 @Composable
-internal fun RiskRing(value: Int, color: Color, modifier: Modifier = Modifier) {
+internal fun RiskRing(
+    value: Int,
+    color: Color,
+    modifier: Modifier = Modifier,
+    track: Color = MaterialTheme.colorScheme.outlineVariant,
+    caption: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
     val animate = animationsEnabled()
     val fill = remember { Animatable(if (animate) 0f else value / 100f) }
     LaunchedEffect(value) {
         if (animate) kotlinx.coroutines.delay(160)
         fill.animateTo(value / 100f, if (animate) RedlineMotion.spatialExpressive() else androidx.compose.animation.core.snap())
     }
-    val track = MaterialTheme.colorScheme.outlineVariant
     Box(modifier.clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.minDimension * 0.11f
@@ -487,7 +492,7 @@ internal fun RiskRing(value: Int, color: Color, modifier: Modifier = Modifier) {
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text((fill.value * 100).roundToInt().toString(), style = FigureStyle.copy(fontSize = 26.sp, lineHeight = 28.sp), color = color)
-            Text("RISK", style = EyebrowStyle.copy(fontSize = 9.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("RISK", style = EyebrowStyle.copy(fontSize = 9.sp), color = caption)
         }
     }
 }

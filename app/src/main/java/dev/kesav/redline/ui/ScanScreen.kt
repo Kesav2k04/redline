@@ -149,6 +149,7 @@ import dev.kesav.redline.ScanViewModel
 import dev.kesav.redline.Severity
 import dev.kesav.redline.ui.camera.CameraScan
 import dev.kesav.redline.ui.camera.deleteScannedPage
+import dev.kesav.redline.ui.document.DocumentViewer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -377,6 +378,22 @@ fun ScanScreen(
         }
     }
     val compared = ui.state as? ScanState.Scanned
+    val open = reading
+    if (open != null && compared != null) {
+        // Without the report, only the first clause's findings are readable in the lease too.
+        val locked = remember(compared, ui.unlocked) {
+            if (ui.unlocked) emptySet() else compared.groups.drop(1).map { it.clause.index }.toSet()
+        }
+        Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+            DocumentViewer(
+                clauses = compared.clauses,
+                groups = compared.groups,
+                focus = open.takeIf { it >= 0 },
+                locked = locked,
+                onBack = { reading = null },
+            )
+        }
+    }
     if (comparing && compared != null) {
         CompareScreen(
             current = compared,
