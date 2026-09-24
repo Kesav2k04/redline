@@ -14,7 +14,7 @@ package dev.kesav.redline
  * first thing a stranger with the app open will paste.
  *
  * The question is about the document, not about any one rule, so it is answered once
- * here rather than bolted onto twenty-seven patterns. A tenancy agreement that never
+ * here rather than bolted onto every pattern. A tenancy agreement that never
  * says tenant, landlord, lease, rent or premises does not exist.
  */
 object LeaseCheck {

@@ -5,8 +5,8 @@ rediscovering the reasoning later, and a few of these are the obvious next moves
 
 ## Worth building next
 
-**More rule coverage.** Twenty-seven rules cover the clauses that cost people money in
-Indian residential leases. Commercial leases, employment contracts and loan agreements
+**More rule coverage.** Thirty-eight rules cover the clauses that cost people money in
+Indian residential leases, with US and English clauses added since. Commercial leases, employment contracts and loan agreements
 have their own set, and the engine does not care which set it loads.
 
 **Rules as data rather than code.** The patterns are already declarative; moving them to

@@ -43,6 +43,8 @@ private class Pattern(
     val none: List<Regex> = emptyList(),
     val unit: Regex? = null,
     val atLeast: Int? = null,
+    /** The quantity must be under this, for rules about too little ("12 hours notice"). */
+    val below: Int? = null,
     val near: Regex? = null,
     /**
      * How far, in characters, the quantity may sit from [near]. Tight for rules whose
@@ -71,6 +73,7 @@ private class Pattern(
         if (unit != null) {
             val q = quantity(text) ?: return null
             if (atLeast != null && q.value < atLeast) return null
+            if (below != null && q.value >= below) return null
             shown = q.shown
         }
         return Finding(clause, id, topic, headline(shown), reason, severity, ask)
@@ -111,6 +114,7 @@ private class Pattern(
 private val PERCENT = Regex("percent")
 private val DAYS = Regex("days?")
 private val MONTHS = Regex("months?")
+private val HOURS = Regex("hours?")
 
 private val TOPIC_ORDER = listOf(
     "Your deposit",
@@ -128,12 +132,15 @@ private val patterns = listOf(
     Pattern(
         id = "late-fee", topic = "Paying late", severity = Severity.HIGH,
         all = listOf(Regex("\\b(?:unpaid|overdue|defaults?|delay\\w*|late)\\b")),
+        // "3% above the Bank of England's base rate" is a margin over a published rate,
+        // and in England it is the one late-rent charge the Tenant Fees Act allows.
+        none = listOf(Regex("\\bbase rate")),
         unit = PERCENT, atLeast = 3,
         near = Regex("\\b(?:penalty|penal|charge|fee|fine|surcharge|interest)\\w*"), reach = 40,
         headline = { "Late payment penalty of $it percent" },
         reason = "A penalty this size compounds quickly, and it lands on top of rent that " +
             "is already owed.",
-        ask = "a late fee of no more than 2 percent a month, starting only after five days of grace",
+        ask = "a late fee within the local legal limit, charged once and only after a grace period",
     ),
     Pattern(
         id = "interest-rate", topic = "Paying late", severity = Severity.HIGH,
@@ -167,7 +174,7 @@ private val patterns = listOf(
         reason = "India's Model Tenancy Act sets two months for a home, England caps most " +
             "deposits at five weeks' rent, and California and New York at one month. This " +
             "is money you cannot touch for the whole term.",
-        ask = "a deposit of no more than two months rent",
+        ask = "a deposit no larger than the local legal cap",
     ),
     Pattern(
         id = "deposit-no-interest", topic = "Your deposit", severity = Severity.MEDIUM,
@@ -178,7 +185,7 @@ private val patterns = listOf(
     ),
     Pattern(
         id = "deposit-refund-delay", topic = "Your deposit", severity = Severity.HIGH,
-        all = listOf(Regex("\\b(?:deposit|refund)"), Regex("\\b(?:vacat\\w*|hand.{0,3}over|quit(?:s|ting)?\\b)")),
+        all = listOf(Regex("\\b(?:deposit|refund)"), Regex("\\b(?:vacat\\w*|hand.{0,3}over|quit(?:s|ting)?\\b|surrender\\w*)")),
         unit = DAYS, atLeast = 31,
         near = Regex("\\b(?:refund\\w*|return\\w*|repa(?:y|id)\\w*)"), reach = 80,
         headline = { "Deposit returned only after $it days" },
@@ -276,7 +283,16 @@ private val patterns = listOf(
     ),
     Pattern(
         id = "entry-without-notice", topic = "Access to your home", severity = Severity.HIGH,
-        all = listOf(Regex("\\b(?:enter(?:s|ed|ing)?\\b|entry|inspect)"), Regex("\\b(?:without prior notice|without notice)")),
+        all = listOf(
+            Regex("\\b(?:enter(?:s|ed|ing)?\\b|entry|inspect)"),
+            Regex("\\b(?:without prior notice|without notice|at any time)"),
+        ),
+        // An emergency exception is the lawful norm, not the problem. "At any time" is
+        // only the problem when no notice period is given anywhere in the clause.
+        none = listOf(
+            Regex("\\bemergenc"),
+            Regex("\\b(?:hours?|days?).{0,2} (?:prior |advance |written )?notice"),
+        ),
         headline = { "The landlord may enter without telling you" },
         reason = "Notice before entry is the normal protection for a home.",
         ask = "at least 24 hours written notice before any entry, except in an emergency",
@@ -349,6 +365,108 @@ private val patterns = listOf(
         headline = { "You must put the place back as it was" },
         reason = "Normal wear over a long tenancy can make that expensive.",
         ask = "an exception for normal wear and tear, with the move-in condition recorded in dated photos",
+    ),
+    Pattern(
+        id = "no-liability", topic = "Who decides", severity = Severity.HIGH,
+        all = listOf(
+            Regex("\\b(?:landlord|lessor|owner)\\b[^.]{0,40}?\\b(?:not|no)\\b[^.]{0,15}\\b(?:liable|responsible)\\b"),
+            Regex("\\b(?:loss|damage|injur)"),
+        ),
+        none = listOf(Regex("\\bnot caused by|\\bunless (?:caused|due)|\\bexcept where|\\bsave where|\\b(?:save|except) to the extent")),
+        headline = { "The landlord takes no responsibility for loss or injury" },
+        reason = "Excusing a landlord even for their own negligence is void in many places, " +
+            "but the clause still puts people off claiming.",
+        ask = "the landlord staying responsible for loss or injury caused by their own negligence",
+    ),
+    Pattern(
+        id = "legal-costs", topic = "What you pay for", severity = Severity.HIGH,
+        all = listOf(
+            Regex("\\battorney.?s?.? fees?|\\blegal (?:fees|costs)|\\bsolicitor.?s?.? (?:fees|costs)"),
+            Regex("\\btenant"),
+        ),
+        none = listOf(Regex("\\bprevailing party|\\beither party|\\beach party|\\bsuccessful party")),
+        headline = { "Legal costs fall on you" },
+        reason = "A one-sided costs clause makes a dispute expensive for you even when you are right.",
+        ask = "each side paying its own legal costs, or costs following the result",
+    ),
+    Pattern(
+        id = "as-is", topic = "What you pay for", severity = Severity.MEDIUM,
+        all = listOf(
+            Regex("\\baccept"),
+            Regex("\\bin (?:its|their) present (?:condition|state)|\\bas.is.? (?:condition|basis)"),
+        ),
+        headline = { "You take the home in whatever state it is in" },
+        reason = "Accepting the present condition can shift repairs onto you that the law " +
+            "leaves with the landlord.",
+        ask = "a written list of defects the landlord will fix before the move-in date",
+    ),
+    Pattern(
+        id = "uk-fee", topic = "What you pay for", severity = Severity.HIGH,
+        all = listOf(Regex("\\bfees?\\b"), Regex("£|\\bpounds?\\b")),
+        headline = { "A fee that may be banned in England" },
+        reason = "Since the Tenant Fees Act 2019, a landlord or agent in England can charge rent, " +
+            "a capped deposit and a few set charges. Almost every other fee is banned.",
+        ask = "the fee to be dropped, or the provision of the Tenant Fees Act that allows it",
+    ),
+    Pattern(
+        id = "pro-cleaning", topic = "Moving out", severity = Severity.MEDIUM,
+        all = listOf(Regex("\\bprofessional(?:ly)? clean")),
+        headline = { "Professional cleaning is charged to you on the way out" },
+        reason = "Cleaning should be judged against the condition at the start, not bought " +
+            "from a firm the landlord picks.",
+        ask = "cleaning judged against the check-in inventory, done by anyone to that standard",
+    ),
+    Pattern(
+        id = "rent-in-advance", topic = "What you pay for", severity = Severity.MEDIUM,
+        all = listOf(Regex("\\bin advance"), Regex("\\brent")),
+        unit = MONTHS, atLeast = 2, near = Regex("\\bin advance"), reach = 40,
+        headline = { "$it months rent paid up front" },
+        reason = "Some places limit rent in advance. In England it is one month before the " +
+            "tenancy starts.",
+        ask = "no more than one month's rent before the tenancy starts",
+    ),
+    Pattern(
+        id = "short-entry-notice", topic = "Access to your home", severity = Severity.MEDIUM,
+        all = listOf(Regex("\\b(?:enter(?:s|ed|ing)?\\b|entry)"), Regex("\\bnotice")),
+        unit = HOURS, below = 24, near = Regex("\\bnotice"), reach = 20,
+        headline = { "Only $it hours notice before the landlord comes in" },
+        reason = "Twenty-four hours is the usual minimum, and some places require two days.",
+        ask = "at least 24 hours written notice before any entry, except in an emergency",
+    ),
+    Pattern(
+        id = "confession", topic = "Who decides", severity = Severity.HIGH,
+        all = listOf(Regex("\\bconsents? in advance to\\b[^.]{0,80}\\bjudgment|\\bconfess\\w* (?:of )?judgment|\\bcognovit")),
+        headline = { "You agree in advance to lose in court" },
+        reason = "Consenting to judgment before any dispute removes the chance to defend yourself.",
+        ask = "the clause removed, so any claim is decided by a court on its merits",
+    ),
+    Pattern(
+        id = "distraint", topic = "Who decides", severity = Severity.HIGH,
+        all = listOf(Regex("\\bpersonal property as (?:a )?(?:pledge|security)|\\bdistrain|\\blien (?:on|upon)\\b[^.]{0,40}\\bproperty")),
+        headline = { "The landlord may hold on to your belongings" },
+        reason = "Seizing a tenant's belongings without a court order is unlawful in many places.",
+        ask = "the clause removed, so unpaid sums are recovered through a court",
+    ),
+    Pattern(
+        id = "pet-insurance", topic = "What you pay for", severity = Severity.MEDIUM,
+        all = listOf(
+            Regex("\\bpet"),
+            Regex("\\binsurance"),
+            Regex("\\b(?:must|shall|required to) (?:take out|obtain|buy|purchase|maintain)"),
+        ),
+        headline = { "Keeping a pet means buying insurance" },
+        reason = "In England a landlord cannot require a tenant to buy insurance; the pet " +
+            "can be covered by the deposit instead.",
+        ask = "pet damage covered within the capped deposit instead of compulsory insurance",
+    ),
+    Pattern(
+        id = "section-21", topic = "Renewal and notices", severity = Severity.HIGH,
+        // A US lease can number its own sections, so "Section 21" alone is not enough.
+        all = listOf(Regex("\\bsection 21\\b"), Regex("\\b(?:housing act|possession)")),
+        headline = { "The clause relies on section 21, which no longer exists" },
+        reason = "No-fault eviction under section 21 ended in England on 1 May 2026. A clause " +
+            "built on it has no effect.",
+        ask = "the section 21 wording removed from the agreement",
     ),
 )
 

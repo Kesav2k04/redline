@@ -83,7 +83,8 @@ curl -L -o eval/models/universal_sentence_encoder.tflite \
 
 ## What replaced it, and how well that works
 
-Rules that extract the actual quantity and name it. There are 27 of them.
+Rules that extract the actual quantity and name it. There were 27 of them when this was
+measured; there are 38 now, and the frozen corpus results below still hold.
 
 ### On the frozen corpus
 

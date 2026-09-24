@@ -49,9 +49,14 @@ Full working, raw output and reproduction steps: [`eval/README.md`](eval/README.
 
 ## What it catches
 
-Twenty-seven rules across late fees, deposits, repairs, lock-in periods, notice
+Thirty-eight rules across late fees, deposits, repairs, lock-in periods, notice
 requirements, rent escalation, entry rights, occupancy limits, automatic renewal,
-deemed service, pass-through charges and restoration costs.
+deemed service, pass-through charges, legal costs, liability waivers and restoration
+costs. The first twenty-seven were written against Indian leases. Eleven more came from
+a set of US and English clauses, which took the scanner from 6 to 18 of 26 costly US
+clauses and from 3 to 13 of 19 English ones, with fewer false flags on both, and left
+every Indian result where it was. That set shaped the new rules, so it is a regression
+check rather than a measure of how far they reach.
 
 Each finding names the figure it found. "Deposit equal to ten months rent", not
 "deposit risk detected".
@@ -184,8 +189,8 @@ Three things are given away on purpose, and each one costs a sale in the short r
 - **The count, in full.** "11 of 16 clauses will cost you money" is the finding. Hiding
   the number would raise conversion and would also make the app worthless to anyone who
   declines, which is most people.
-- **The whole checklist.** "What Redline checks" lists all 27 rules, grouped, before a
-  single rupee changes hands. The counts are derived from the rule table in
+- **The whole checklist.** "What Redline checks" lists all 38 rules, grouped, before
+  any money changes hands. The counts are derived from the rule table in
   [`Rules.kt`](app/src/main/java/dev/kesav/redline/Rules.kt), so the screen cannot
   advertise a check the scanner does not run, and `TopicsTest` fails the build if the
   two ever drift. A paywall in front of an unexplained judgement is the thing a reader
@@ -248,7 +253,7 @@ same findings however it arrived.
 ## What it asks for
 
 A finding that stops at "this is bad" leaves the reader with a problem and no next move.
-Every rule carries the change to ask for: "a deposit of no more than two months rent",
+Every rule carries the change to ask for: "a deposit no larger than the local legal cap",
 "at least 24 hours written notice before any entry, except in an emergency". It appears
 on the card under the reason.
 
@@ -300,7 +305,8 @@ not always the people best served by an app.
 ## What this is not
 
 Not legal advice. It is pattern matching over contract text, it was written against
-Indian residential leases, and it will miss things. Read the clause it shows you.
+Indian residential leases and extended with US and English clauses, and it will miss
+things. Read the clause it shows you.
 
 ## Licence
 
