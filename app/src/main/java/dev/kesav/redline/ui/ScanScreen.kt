@@ -302,6 +302,9 @@ fun ScanScreen(
                 photoPages = ui.photoPages,
                 onOpen = { openFile.launch(arrayOf("application/pdf", "image/*", "text/plain")) },
                 onPhoto = if (!hasCamera) null else { { scanning = true } },
+                saved = ui.saved,
+                onOpenSaved = viewModel::openSaved,
+                onForget = viewModel::forget,
                 modifier = content,
             )
 
