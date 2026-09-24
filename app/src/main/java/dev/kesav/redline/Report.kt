@@ -42,7 +42,7 @@ object Report {
         return buildString {
             appendLine(
                 "Redline read ${state.clauseCount} clauses in this lease. " +
-                    "${state.flaggedClauses} of them will cost money."
+                    "${state.flaggedClauses} of them could cost money."
             )
             appendLine()
 

@@ -40,6 +40,41 @@ class AdversarialTest {
         }
     }
 
+    // ------------------------------------------------------------ US wording, UK rules
+
+    @Test
+    fun `sole discretion over pets or alterations is not a deduction`() {
+        val clauses = listOf(
+            "No pets shall be kept on the premises without the prior written consent of the " +
+                "Landlord, which may be withheld at the Landlord's sole discretion.",
+            "Tenant shall make no alterations to the Premises, and any approval is at " +
+                "Landlord's sole discretion.",
+            "Subletting is permitted only with the Landlord's consent, given at its absolute discretion.",
+        )
+        for (c in clauses) {
+            assertTrue("sole-discretion fired on: $c", "sole-discretion" !in rules(c))
+        }
+    }
+
+    @Test
+    fun `sole discretion over the deposit still fires`() {
+        val c = "Landlord may deduct from the security deposit such amounts as Landlord in its " +
+            "sole discretion considers necessary."
+        assertTrue("sole-discretion" in rules(c))
+    }
+
+    @Test
+    fun `a pet weight in pounds is not an English fee`() {
+        val clauses = listOf(
+            "One dog under 25 pounds is permitted, subject to a non-refundable pet fee of \$300.",
+            "Pets must weigh less than thirty pounds, and a pet fee is payable with the first month's rent.",
+        )
+        for (c in clauses) {
+            assertTrue("uk-fee fired on: $c", "uk-fee" !in rules(c))
+        }
+        assertTrue("uk-fee" in rules("The Tenant shall pay an administration fee of £150 on signing."))
+    }
+
     @Test
     fun `residential is not a second occupant`() {
         val c = "The residential premises shall be used by the Tenant's family only, and the " +

@@ -81,7 +81,7 @@ sealed interface ScanState {
          *
          * One clause routinely trips several rules: a deposit of ten months rent that is
          * also returned only after ninety days is two findings on one sentence. Counting
-         * findings here made the screen read "11 of 16 clauses will cost you money, 13 of
+         * findings here made the screen read "11 of 16 clauses could cost you money, 13 of
          * them are worth arguing about", and 13 of 11 is not a thing.
          */
         val highClauses: Int = findings

@@ -1,6 +1,6 @@
 # The measurement that chose how Redline works
 
-Redline flags lease clauses that will cost you money. There were two candidate ways to
+Redline flags lease clauses that could cost you money. There were two candidate ways to
 decide which clauses those are: rank each clause against a bank of written "costly clause"
 patterns using on-device sentence embeddings, or extract the actual numbers and
 obligations and check them against known limits.

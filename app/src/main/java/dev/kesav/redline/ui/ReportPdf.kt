@@ -49,7 +49,7 @@ internal object ReportPdf {
         c0.drawText("$flagged", M + 20f, pages.y + 82f, text(40f, 0xFFFF6B5E.toInt(), bold = true))
         val nWidth = text(40f, 0, bold = true).measureText("$flagged")
         c0.drawText(
-            "of ${state.clauseCount} clauses in this lease will cost money",
+            "of ${state.clauseCount} clauses in this lease could cost money",
             M + 28f + nWidth, pages.y + 80f, text(14f, 0xFFF2F3F5.toInt(), bold = true),
         )
         pages.y += 104f + 24f

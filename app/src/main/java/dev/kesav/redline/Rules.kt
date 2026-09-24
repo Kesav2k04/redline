@@ -194,7 +194,12 @@ private val patterns = listOf(
     ),
     Pattern(
         id = "sole-discretion", topic = "Who decides", severity = Severity.HIGH,
-        all = listOf(Regex("\\b(?:sole discretion|absolute discretion)")),
+        // Only where money is being kept back. US leases say "sole discretion" about pets,
+        // sublets and alterations too, and the headline below would be false there.
+        all = listOf(
+            Regex("\\b(?:sole discretion|absolute discretion)"),
+            Regex("\\b(?:deduct\\w*|deposit|retain\\w*|damages?)\\b"),
+        ),
         headline = { "The landlord alone decides what to deduct" },
         reason = "Sole discretion leaves the amount to the landlord's judgement, with " +
             "nothing in the lease to measure it against.",
@@ -403,6 +408,9 @@ private val patterns = listOf(
     Pattern(
         id = "uk-fee", topic = "What you pay for", severity = Severity.HIGH,
         all = listOf(Regex("\\bfees?\\b"), Regex("£|\\bpounds?\\b")),
+        // "Pounds" is also a weight, and a US pet clause names both a fee and a weight
+        // limit. A clause priced in dollars is not an English fee either.
+        none = listOf(Regex("\\$|\\bdollars?\\b|\\bweigh\\w*|\\blbs?\\b")),
         headline = { "A fee that may be banned in England" },
         reason = "Since the Tenant Fees Act 2019, a landlord or agent in England can charge rent, " +
             "a capped deposit and a few set charges. Almost every other fee is banned.",

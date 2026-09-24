@@ -1,6 +1,6 @@
 # Redline
 
-Reads a rental lease and points at the clauses that will cost you money.
+Reads a rental lease and points at the clauses that could cost you money.
 
 Built by a student for the Next Gen Award at RevenueCat Shipaton 2026.
 
@@ -104,6 +104,12 @@ dodge a recipe would cost real catches. The document is checked instead, once, i
 distinct words that only tenancies use. That is loose enough to accept a single clause
 shared in from another app and tight enough to reject all four documents above.
 
+One rule was later narrowed for a reason of its own. US leases say "sole discretion" about
+pets, sublets and alterations, where "the landlord alone decides what to deduct" is simply
+false, so the rule now needs a deduction or the deposit in the same clause. The recipe
+stopped tripping it as a side effect; the privacy policy and the job offer still trip
+others, so the check still earns its place.
+
 The first version of that list was too narrow in the other direction. An Indian leave and
 licence deed names a licensor and a licensee and never says landlord, and 9 of 24 real
 clauses in [`OnTopicTest`](app/src/test/java/dev/kesav/redline/OnTopicTest.kt) were told
@@ -114,7 +120,7 @@ still fail, each with its reason written beside it.
 
 When the check fails the app says so, shows what matched anyway so the claim can be
 checked, and **does not offer to sell anything**. `OffTopicTest` pins all of it, including
-an assertion that those four documents still trip rules, so the day the check stops
+an assertion that the privacy policy and the job offer still trip rules, so the day the check stops
 earning its place the test says so rather than going quietly green.
 
 The second thing the corpus hid was inside real leases, and it was worse, because a lease
@@ -155,9 +161,11 @@ the fix than it does about the corpus.
   identifier collection is off, so what reaches RevenueCat is stable without being a device
   identifier. `PurchaseIdTest` pins that the hash stays stable, because nothing else here
   would notice if it stopped.
-- What the purchase buys is durable. `Report.build` turns the findings into plain text
-  and hands it to `ACTION_SEND`, so the lease arrives by share and the argument leaves
-  the same way. Nothing is written to disk on the way out. Finding eleven costly clauses
+- What the purchase buys is durable. `Report.letter` writes the landlord a request for
+  each change, and `Report.build` turns the findings into plain text for anyone else, both
+  handed to `ACTION_SEND`, so the lease arrives by share and the argument leaves the same
+  way. The full report also goes as a PDF, written to the app's own cache under one fixed
+  name that each send overwrites, and shared through a `FileProvider`. Finding eleven costly clauses
   is only half the job: the tenant still has to raise them with a landlord, and retyping
   nineteen findings into a message is where that stops happening.
 - No key in the repository. `BuildConfig.REVENUECAT_API_KEY` is read from
@@ -187,7 +195,7 @@ charging for something the reader has not yet been given a reason to want.
 
 Three things are given away on purpose, and each one costs a sale in the short run:
 
-- **The count, in full.** "11 of 16 clauses will cost you money" is the finding. Hiding
+- **The count, in full.** "11 of 16 clauses could cost you money" is the finding. Hiding
   the number would raise conversion and would also make the app worthless to anyone who
   declines, which is most people.
 - **The whole checklist.** "See all 38 checks" opens every rule, grouped, before

@@ -701,7 +701,9 @@ internal fun Results(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "Pay once: every clause, what to ask for, and a letter to send your landlord.",
+                        // The entitlement is lifetime. Without saying so, the price read as
+                        // the cost of this one lease.
+                        text = "Pay once, for every lease you scan: each clause, what to ask for, and a letter to your landlord.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -849,7 +851,7 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
     val heading = when {
         flagged == 0 -> "Nothing matched"
         !state.looksLikeLease -> "This does not read like a lease"
-        else -> "$flagged of ${state.clauseCount} clauses will cost you money"
+        else -> "$flagged of ${state.clauseCount} clauses could cost you money"
     }
 
     val moving = animationsEnabled()
@@ -933,7 +935,7 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
                     }
-                    Text("will cost you money", style = MaterialTheme.typography.titleLarge)
+                    Text("could cost you money", style = MaterialTheme.typography.titleLarge)
                 }
 
                 SeverityBar(
@@ -1054,7 +1056,7 @@ private fun Legend(color: Color, label: String) {
 internal fun severitySplit(high: Int, flagged: Int): String = when {
     high == flagged && flagged == 1 -> "The one below is a serious one."
     high == flagged -> "All $flagged are serious."
-    high == 0 -> "None is in the worst band, and all $flagged still cost you."
+    high == 0 -> "None is in the worst band, and all $flagged are still worth raising."
     high == 1 -> "One of them is serious."
     else -> "$high of them are serious."
 }

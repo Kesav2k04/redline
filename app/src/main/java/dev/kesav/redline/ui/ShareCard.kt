@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
  */
 internal object ShareCardText {
     const val LINK = "github.com/Kesav2k04/redline"
-    const val LINE = "in my lease will cost me money"
+    const val LINE = "in my lease could cost me money"
     const val FOOT = "Checked on my phone before signing. The lease was never uploaded."
 
     fun ofTotal(state: ScanState.Scanned) = "of ${state.clauseCount} clauses"
@@ -42,7 +42,7 @@ internal object ShareCardText {
     fun message(state: ScanState.Scanned): String {
         val n = state.flaggedClauses
         val clauses = if (n == 1) "1 clause" else "$n clauses"
-        return "Redline found $clauses in my lease that will cost me money. It read the " +
+        return "Redline found $clauses in my lease that could cost me money. It read the " +
             "lease on my phone and never uploaded it. https://$LINK"
     }
 

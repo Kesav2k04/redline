@@ -22,6 +22,10 @@ import org.junit.Test
  * The rules were not narrowed, because they are right about leases and narrowing them to
  * dodge a recipe would cost real catches. The document is checked instead, once, and the
  * findings over a non-lease are shown free and under a warning rather than sold.
+ *
+ * Later, one rule was narrowed for a reason of its own: US leases say "sole discretion"
+ * about pets and sublets, where "the landlord alone decides what to deduct" is false. It
+ * now needs a deduction or the deposit nearby, and the recipe stopped tripping it.
  */
 class OffTopicTest {
 
@@ -79,14 +83,18 @@ class OffTopicTest {
         //
         // The news article used to be on this list. It tripped the occupant rule because
         // "reside" matched inside "Residents", and word boundaries on the triggers fixed
-        // that at the source. Three still fire, because "at its sole discretion" and
-        // "continued use constitutes acceptance" are ordinary English and always will be.
-        for ((name, text) in offTopic - "news article") {
+        // that at the source. The recipe went the same way: sole discretion now has to sit
+        // beside a deduction or the deposit, because US leases use the phrase about pets
+        // and sublets too. Two still fire, because "continued use constitutes acceptance"
+        // and an employer's lock-in are ordinary English and always will be.
+        for ((name, text) in offTopic - "news article" - "recipe") {
             val findings = Scanner.scan(ClauseSplitter.split(text))
             assertTrue("$name no longer trips any rule", findings.isNotEmpty())
         }
         val news = Scanner.scan(ClauseSplitter.split(newsArticle)).map { it.ruleId }
         assertFalse("residents read as a second occupant again", "occupant-surcharge" in news)
+        val cooking = Scanner.scan(ClauseSplitter.split(recipe)).map { it.ruleId }
+        assertFalse("the recipe's discretion read as a deduction again", "sole-discretion" in cooking)
     }
 
     @Test

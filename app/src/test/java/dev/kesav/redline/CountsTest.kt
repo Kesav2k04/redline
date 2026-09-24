@@ -12,7 +12,7 @@ import org.junit.Test
  * The two numbers on the results heading have to describe the same population.
  *
  * They did not. The heading counted clauses and the line under it counted findings, so
- * the sample lease rendered "11 of 16 clauses will cost you money" above "13 of them are
+ * the sample lease rendered "11 of 16 clauses could cost you money" above "13 of them are
  * worth arguing about". Nothing crashed and no test failed; it was only visible by
  * reading the screen.
  */
@@ -64,7 +64,7 @@ class CountsTest {
 
     @Test
     fun `the subheading never says a flagged clause is free`() {
-        // The heading above it reads "N of M clauses will cost you money". Any word in
+        // The heading above it reads "N of M clauses could cost you money". Any word in
         // the line beneath that implies some of those N are fine puts the two largest
         // pieces of type on the screen in open disagreement, which is exactly what
         // "9 marked costly, 2 worth checking" did.
@@ -156,15 +156,15 @@ class CountsTest {
 
     @Test
     fun `the readme quotes the heading the sample lease actually produces`() {
-        // README.md states "11 of 16 clauses will cost you money" in the body and in
+        // README.md states "11 of 16 clauses could cost you money" in the body and in
         // the alt text on the locked screenshot. The eleven was pinned here; the
         // sixteen was not, so a change to the splitter could have made the README
         // describe a screen that no longer exists.
         val scanned = scanSample()
         assertEquals(
             "the heading the README quotes no longer matches the fixture",
-            "11 of 16 clauses will cost you money",
-            "${scanned.flaggedClauses} of ${scanned.clauseCount} clauses will cost you money",
+            "11 of 16 clauses could cost you money",
+            "${scanned.flaggedClauses} of ${scanned.clauseCount} clauses could cost you money",
         )
     }
 }

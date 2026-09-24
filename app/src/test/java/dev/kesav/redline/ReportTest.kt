@@ -66,7 +66,7 @@ class ReportTest {
         assertTrue(
             "header disagrees with the screen",
             text.contains("${state.clauseCount} clauses") &&
-                text.contains("${state.flaggedClauses} of them will cost money"),
+                text.contains("${state.flaggedClauses} of them could cost money"),
         )
     }
 
