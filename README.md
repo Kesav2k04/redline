@@ -189,7 +189,7 @@ result from one proves nothing about the other.
 | Offering resolves, live price on the button | yes |
 | Purchase declined at the store | stays locked, button re-enables, reason shown |
 | Purchase completed | every finding reveals, call to action removed |
-| Uninstall, reinstall, scan again | unlocked with no tap and no second purchase |
+| Uninstall, reinstall, scan again | the report opens with no tap and no second purchase |
 
 The last row is the one worth reading. A full uninstall takes every local file with it,
 so nothing but the derived app user id carries the purchase across, and the report came
