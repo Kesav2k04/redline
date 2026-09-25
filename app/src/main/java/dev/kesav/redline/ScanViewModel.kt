@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -100,6 +102,9 @@ sealed interface ScanState {
     }
 }
 
+/** How long a forgotten lease can be brought back, before any accessibility allowance. */
+internal const val UNDO_HOLD_MILLIS = 5_000L
+
 data class ScanUi(
     val text: String = "",
     val state: ScanState = ScanState.Editing,
@@ -115,6 +120,8 @@ data class ScanUi(
     val rent: Long? = null,
     /** Leases scanned on this phone, newest first, for the comparison. */
     val saved: List<SavedLease> = emptyList(),
+    /** A lease just forgotten, held so one tap can put it back, or null once the hold ends. */
+    val forgotten: SavedLease? = null,
     /** False until the first entitlement read lands. Distinct from `unlocked == false`. */
     val entitlementsKnown: Boolean = false,
     val busy: Boolean = false,
@@ -346,7 +353,9 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 // A lease scanned again keeps the name it was first saved under.
                 val title = _ui.value.saved.firstOrNull { it.id == leaseFingerprint(text) }?.title
                     ?: LeaseStore.titleFor(text, _ui.value.source)
-                val saved = withContext(Dispatchers.IO) { LeaseStore.save(getApplication(), text, title, _ui.value.place) }
+                val saved = storeLock.withLock {
+                    withContext(Dispatchers.IO) { LeaseStore.save(getApplication(), text, title, _ui.value.place) }
+                }
                 _ui.update { it.copy(saved = saved) }
             }
         }
@@ -358,12 +367,41 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         scan()
     }
 
-    fun forget(id: String) {
+    /**
+     * Removes a saved lease and holds it in [ScanUi.forgotten] for [holdMillis], so one tap
+     * can bring it back. The file is written at once: a process killed during the hold leaves
+     * the lease forgotten, which is what the reader asked for. A second forget ends the first
+     * one's hold, so only the latest can be undone.
+     */
+    fun forget(id: String, holdMillis: Long = UNDO_HOLD_MILLIS) {
+        val lease = _ui.value.saved.firstOrNull { it.id == id }
+        forgetHold?.cancel()
+        forgetHold = viewModelScope.launch {
+            val saved = storeLock.withLock { withContext(Dispatchers.IO) { LeaseStore.remove(getApplication(), id) } }
+            _ui.update { it.copy(saved = saved, forgotten = lease) }
+            if (lease != null) {
+                delay(holdMillis)
+                _ui.update { it.copy(forgotten = null) }
+            }
+        }
+    }
+
+    /** Writes back the lease [forget] is holding, under its own title and date. */
+    fun undoForget() {
+        val lease = _ui.value.forgotten ?: return
+        forgetHold?.cancel()
+        _ui.update { it.copy(forgotten = null) }
         viewModelScope.launch {
-            val saved = withContext(Dispatchers.IO) { LeaseStore.remove(getApplication(), id) }
+            val saved = storeLock.withLock { withContext(Dispatchers.IO) { LeaseStore.restore(getApplication(), lease) } }
             _ui.update { it.copy(saved = saved) }
         }
     }
+
+    private var forgetHold: Job? = null
+
+    // Saving, forgetting and restoring each read the whole file and write it back, so two at
+    // once would lose one of them.
+    private val storeLock = kotlinx.coroutines.sync.Mutex()
 
     /**
      * The reader says where the home is. Kept on the phone, never sent anywhere, and the

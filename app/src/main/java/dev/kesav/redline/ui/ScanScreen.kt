@@ -64,8 +64,12 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.ui.platform.LocalAccessibilityManager
+import dev.kesav.redline.UNDO_HOLD_MILLIS
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -252,6 +256,28 @@ fun ScanScreen(
         }
     }
 
+    // A forgotten lease can be put back for as long as the view model holds it, stretched by
+    // however long the reader has asked Android to leave controls on screen. The hold is the
+    // only timer: when it ends, this effect is cancelled and takes the snackbar with it, so
+    // Undo is never offered for a lease that is already gone.
+    val accessibility = LocalAccessibilityManager.current
+    val undoHold = remember(accessibility) {
+        accessibility?.calculateRecommendedTimeoutMillis(
+            UNDO_HOLD_MILLIS,
+            containsText = true,
+            containsControls = true,
+        ) ?: UNDO_HOLD_MILLIS
+    }
+    LaunchedEffect(ui.forgotten) {
+        val lease = ui.forgotten ?: return@LaunchedEffect
+        val result = snackbar.showSnackbar(
+            message = "Forgot \"${lease.title}\"",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Indefinite,
+        )
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoForget()
+    }
+
     // No app bar. Each state draws its own header: the first screen leads with what
     // the app promises, and "Redline" in a bar above it only repeated the launcher label.
     Box(Modifier.fillMaxSize()) {
@@ -306,7 +332,7 @@ fun ScanScreen(
                 onPhoto = if (!hasCamera) null else { { scanning = true } },
                 saved = ui.saved,
                 onOpenSaved = viewModel::openSaved,
-                onForget = viewModel::forget,
+                onForget = { viewModel.forget(it, undoHold) },
                 modifier = content,
             )
 
