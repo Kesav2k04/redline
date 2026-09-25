@@ -275,7 +275,8 @@ internal fun ctaLabel(offer: Offer?): String = when {
     offer.plan == Plan.PASS -> "Open this report for ${offer.price}"
     offer.trial != null -> "Start ${offer.trial}"
     offer.plan == Plan.PRO_LIFETIME -> "Get Renter Pro for ${offer.price}"
-    else -> "Get Renter Pro, ${offer.price}"
+    offer.plan == Plan.PRO_ANNUAL -> "Get Renter Pro, ${offer.price} a year"
+    else -> "Get Renter Pro, ${offer.price} a month"
 }
 
 /** The whole deal in one sentence, above the fold and next to the button that makes it. */
