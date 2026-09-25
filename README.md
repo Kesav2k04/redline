@@ -18,56 +18,56 @@ Everything that touches the lease runs directly on the device. No account and no
   <img src="docs/compare.png" alt="Compare screen: side-by-side lease comparison with butterfly risk bars" width="31%" />
 </p>
 
-The scan always runs to completion and the count is honest. The first flagged clause is free in full, with the exact sentence it came from, the financial calculation, and what to ask for instead. The purchase opens the remaining clauses, the complete marked document viewer, the counter-proposal drafter, and side-by-side lease comparison.
+The scan always runs to completion and the count is honest. The first flagged clause is free in full, with the exact sentence it came from, the financial calculation, and what to ask for instead. Paying opens the remaining clauses, every finding in the marked-up lease, and the reply drafter. Renter Pro also compares two saved leases side by side.
 
 ## In five lines
 
 - **What it does:** Reads a lease on the device (PDF, in-app CameraX scan, file share, or paste) and checks 38 rules across late fees, deposit locks, liability waivers, entry rights, and upkeep traps, quoting the exact clause and citing local tenant statutes for six jurisdictions.
 - **Visceral UI:** Interactive 3D tilting lease hero with spring physics, 0-100 radial risk gauge, 4-category bento grid, physical marker ink document viewer with margin jump rail, counter-proposal drafter, and side-by-side comparison with butterfly bars.
 - **Free:** The scan, 0-100 risk score, category bento, honest clause count, the first flagged clause in full, subjects of all locked clauses, and the complete 38-rule inspection catalog.
-- **Paid, honest pricing:** Single Lease Pass ($1.99) for one lease, or Renter Pro ($4.99) for unlimited scans and side-by-side comparison, powered by RevenueCat under the `full_report` entitlement.
-- **Privacy and offline guarantee:** Zero cloud processing for lease text. No accounts, no tracker SDKs, and purchases restore across uninstalls via a salted SHA-256 hash of the device signing scope.
+- **Paid, priced by the store:** a single-lease pass for the report on screen, or Renter Pro for every lease you scan plus comparison. Both are read from the RevenueCat offering, and Pro is the `full_report` entitlement.
+- **Privacy:** the lease text never leaves the phone and there is no account. The app talks to RevenueCat for the price and the payment, and ML Kit sends Google its usage diagnostics (device, app and performance details, not the text it reads). Pro restores after a reinstall with no tap.
 
 ## Product experience
 
 ### In-app camera scanner
-Photograph paper leases directly inside the app with CameraX. A live ML Kit text recognition pipeline analyzes preview frames at 30 fps, drawing bounding boxes over recognized text and signalling when text is stable. Includes haptic shutter feedback, torch toggle, and multi-page capture queues.
+Photograph paper leases directly inside the app with CameraX. ML Kit text recognition reads the preview on the phone, outlines the text it finds, and signals when the page is steady enough to shoot. It has a torch, a haptic shutter, and takes page after page into one lease.
 
 ### Interactive 3D lease hero
-The home screen features a 3D contract card rendered in Compose graphics layers with spatial spring physics. Dragging the card tilts the page with realistic lighting glares and depth parallax, reacting to pointer position and snapping back on release.
+The home screen features a 3D contract card rendered in Compose graphics layers with spatial spring physics. Dragging tilts the pages, and they spring back on release. A scanning beam marks lines red and amber as it passes, and two floating figures drift with the tilt.
 
 ### Radial risk gauge and bento grid
 The report leads with a 0 to 100 risk gauge drawn with a sweep gradient:
 - **Low Risk (0-29):** Standard terms with fair protections.
 - **Caution (30-59):** Unbalanced clauses that warrant negotiation.
-- **Toxic Clauses (60-100):** Serious financial exposure or void terms.
+- **Toxic Clauses (60-100):** Several serious clauses.
 
 Under the gauge, the bento grid splits risk into four distinct pillars: Financial exposure, Privacy & entry, Termination traps, and Maintenance shifting.
 
 ### Stated financial exposure and void clauses
-Redline calculates actual stated monetary exposure: deposit multiples, late fee caps, lock-in rent totals, and utility shift surcharges. Where a clause violates regional law, a dedicated alert cites the specific statute (such as England's Tenant Fees Act 2019 or New York Housing Stability and Tenant Protection Act).
+Redline adds up what the flagged clauses put at stake in the lease's own terms: months of rent held as deposit or charged for leaving early, plus sums the lease states. Charges that repeat are listed but never added to the total. Type the monthly rent and months turn into money. Where a clause violates regional law, a dedicated alert cites the specific statute (such as England's Tenant Fees Act 2019 or New York's General Obligations Law 7-108).
 
 ### Physical ink document viewer
 Renders the complete lease in Source Serif with generous line height and margin clause numbers. Flagged clauses feature irregular marker highlighter strokes drawn beneath the text. Tapping any mark expands the finding details. A right-hand jump rail shows marker locations across the entire document for quick navigation.
 
 ### Negotiation counter-proposal drafter
-Finding a problem is only half the work; the tenant still needs to reply. Redline generates ready-to-send counter-proposals in two formats:
-- **Formal Email:** Professional, structured negotiation letters citing statutory caps and asking for specific clause modifications.
-- **Concise WhatsApp:** Direct, friendly text summaries built for landlords or brokers who communicate by chat.
+Finding a problem is only half the work; the tenant still needs to reply. Redline drafts the reply from the clauses you tick, with fair wording proposed for each:
+- **Email or WhatsApp:** a letter with a subject line, or a short chat message sent straight to WhatsApp.
+- **Friendly or firm:** the firm tone cites the law for the place you chose, where a clause is void there.
 
 ### Side-by-side lease comparison
-Tenants comparing two apartments can save scans into local storage and view them side by side. Redline plots paired butterfly risk bars across all four categories, highlights score differences, and marks which lease is safer for each issue.
+Every lease you scan is kept on the phone (the last 12), and the recent ones are listed on the home screen. Renter Pro puts any two side by side: a verdict naming the safer lease and why, the score, serious and flagged clauses and rent at stake with the better side marked, and paired bars for the four categories.
 
 ## Verify the monetization in 60 seconds
 
 - **Entitlement identifier:** `full_report`, defined in `Billing.kt`.
 - **Honest price presentation:** The button price comes dynamically from the RevenueCat offering, never hardcoded strings. If multiple packages exist, the label shows "From $X" only when tiers differ, and "paid once" only when every plan is non-recurring.
 - **No purchase ambush:** The price appears on the home screen before the user scans, and on the bottom bar of the report.
-- **Tiered paywall:** Supports both a Single Lease Pass ($1.99 one-time consumable) and Renter Pro ($4.99 lifetime or recurring subscription). Single passes grant immediate access to the current lease report, while Renter Pro provides unlimited scans, side-by-side comparison, and negotiation drafting.
+- **Tiered paywall:** plans are read from the offering by package type. A custom package whose identifier contains `pass` is the single-lease pass, kept on the phone against a fingerprint of that lease. Lifetime, annual and monthly packages are Renter Pro, which opens every report and the comparison. A free trial on a subscription changes the button to "Start 7 days free" (for a seven-day trial), and the terms line says what is charged after it.
 - **Honest button state:** The purchase button stays disabled until `Billing.known` confirms entitlement state from `CustomerInfo`. A paid report is never shown and then abruptly locked, and users are never prompted to buy what they already own.
 - **Offline resilience:** If launched without network, the paywall does not crash or trap the user. When a network connection returns, RevenueCat re-fetches the offering, and an `UpdatedCustomerInfoListener` synchronizes entitlement state without requiring an app restart.
-- **Account-free restoration:** Purchases are tied to an anonymous app user ID derived from a salted SHA-256 hash of the device signing scope (`ANDROID_ID`). A user who uninstalls and reinstalls the app recovers their purchase on the first launch without tapping restore.
-- **Zero API keys committed:** `BuildConfig.REVENUECAT_API_KEY` is loaded from `local.properties`. When built without a key, the app compiles, runs, and completes scans with the paywall safely in sandbox mode.
+- **Account-free restoration:** RevenueCat gets an app user ID derived from a salted SHA-256 hash of `ANDROID_ID`, so after a reinstall Renter Pro is back on the first launch without tapping restore. A single-lease pass is remembered on the phone, so it does not survive an uninstall.
+- **Zero API keys committed:** `BuildConfig.REVENUECAT_API_KEY` is loaded from `local.properties`. With no key the app still builds, runs and scans, with the paywall locked.
 
 ## Why rules instead of embeddings
 
@@ -91,14 +91,14 @@ Rules provide what probabilistic models cannot:
 
 The app checks local tenant protections for six jurisdictions, shifting thresholds and citing legislation directly:
 
-| Jurisdiction | Security deposit cap | Deposit return deadline | Late fee restriction | Governing statute |
+| Place | Deposit cap | Deposit back within | Late fees | Cited as |
 |---|---|---|---|---|
-| California | 1 month rent (2 for small landlords) | 21 days | Fair estimate of actual costs | Cal. Civ. Code § 1950.5 |
-| New York | 1 month rent | 14 days | Lesser of $50 or 5% of monthly rent | N.Y. Real Prop. Law § 238-a |
-| Massachusetts | 1 month rent | 30 days | Prohibited until 30 days overdue | Mass. Gen. Laws ch. 186, § 15B |
-| Texas | No statutory cap | 30 days | Presumed reasonable up to 10-12% | Tex. Prop. Code § 92.019 |
-| England | 5 weeks rent | 10 days from agreement | Default fees capped; 3% above base rate | Tenant Fees Act 2019 |
-| India | 2 months rent (Model Tenancy Act) | At handover | Presumed notice terms | Model Tenancy Act 2021 |
+| California | 1 month's rent (2 for a landlord with no more than two properties and four homes) | 21 days, itemised | Only a fair estimate of the landlord's cost | Civil Code 1950.5, 1671 |
+| New York | 1 month's rent, counting rent paid in advance | 14 days | Lesser of $50 or 5% of rent, once rent is 5 days late | General Obligations Law 7-108, Real Property Law 238-a |
+| Massachusetts | 1 month's rent | 30 days, itemised and sworn | None until rent is 30 days overdue | General Laws ch. 186, s. 15B |
+| Texas | No cap | 30 days, after a forwarding address in writing | Presumed reasonable up to 12% (four homes or fewer) or 10%, once rent is 2 full days late | Property Code 92.103, 92.019 |
+| England | 5 weeks' rent (6 where the year's rent is £50,000 or more) | 10 days from agreeing the amount | No late fee; interest only, on rent 14 days late, at most 3% above base rate | Tenant Fees Act 2019 |
+| India | None in most states; the Model Tenancy Act 2021 proposes 2 months as a model | Not covered | Not covered | Model Tenancy Act 2021 |
 
 ## Build and run
 

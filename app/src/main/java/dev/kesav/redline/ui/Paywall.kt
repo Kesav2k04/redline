@@ -224,7 +224,9 @@ internal fun PaywallSheet(
             ) {
                 Assure(RedlineIcons.ShieldCheck, "Lease text stays on this phone")
                 Assure(RedlineIcons.Verified, "No account needed")
-                Assure(RedlineIcons.Restore, "Restores on reinstall")
+                // A pass is remembered on the phone against the lease, so only Pro comes back
+                // after an uninstall. Saying so under the pass would be the one untrue line here.
+                if (chosen != Plan.PASS) Assure(RedlineIcons.Restore, "Restores on reinstall")
             }
 
             Spacer(Modifier.height(Space.l))
