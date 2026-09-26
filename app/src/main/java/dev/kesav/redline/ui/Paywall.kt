@@ -224,7 +224,9 @@ internal fun PaywallSheet(
             ) {
                 Assure(RedlineIcons.ShieldCheck, "Lease text stays on this phone")
                 Assure(RedlineIcons.Verified, "No account needed")
-                Assure(RedlineIcons.Restore, "Restores on reinstall")
+                // A pass is remembered on the phone against the lease, so only Pro comes back
+                // after an uninstall. Saying so under the pass would be the one untrue line here.
+                if (chosen != Plan.PASS) Assure(RedlineIcons.Restore, "Restores on reinstall")
             }
 
             Spacer(Modifier.height(Space.l))
@@ -275,7 +277,8 @@ internal fun ctaLabel(offer: Offer?): String = when {
     offer.plan == Plan.PASS -> "Open this report for ${offer.price}"
     offer.trial != null -> "Start ${offer.trial}"
     offer.plan == Plan.PRO_LIFETIME -> "Get Renter Pro for ${offer.price}"
-    else -> "Get Renter Pro, ${offer.price}"
+    offer.plan == Plan.PRO_ANNUAL -> "Get Renter Pro, ${offer.price} a year"
+    else -> "Get Renter Pro, ${offer.price} a month"
 }
 
 /** The whole deal in one sentence, above the fold and next to the button that makes it. */

@@ -2,6 +2,8 @@ package dev.kesav.redline
 
 import android.content.Context
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -57,6 +59,19 @@ object LeaseStore {
         return next
     }
 
+    /**
+     * Puts back a lease that was just forgotten, as it was: its own title and date, and so its
+     * old place in the list. [save] would stamp it as scanned now and move it to the top. A
+     * lease scanned again in the meantime is already back, and that newer copy is kept.
+     */
+    fun restore(context: Context, lease: SavedLease): List<SavedLease> {
+        val current = all(context)
+        if (current.any { it.id == lease.id }) return current
+        val next = (current + lease).sortedByDescending { it.savedAt }.take(KEEP)
+        write(context, next)
+        return next
+    }
+
     private fun write(context: Context, leases: List<SavedLease>) {
         val array = JSONArray()
         for (l in leases) {
@@ -72,7 +87,9 @@ object LeaseStore {
         val file = File(context.filesDir, FILE)
         val tmp = File(context.filesDir, "$FILE.tmp")
         tmp.writeText(array.toString())
-        tmp.renameTo(file)
+        // Not File.renameTo, which returns false instead of replacing an existing file on some
+        // platforms, and so drops every write after the first without a word.
+        Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     }
 
     /**
