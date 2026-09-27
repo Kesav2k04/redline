@@ -1,5 +1,6 @@
 package dev.kesav.redline.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -112,6 +113,7 @@ internal fun Editor(
     saved: List<SavedLease> = emptyList(),
     onOpenSaved: (SavedLease) -> Unit = {},
     onForget: (String) -> Unit = {},
+    backEnabled: Boolean = true,
 ) {
     // Set by the paste tile when the clipboard is empty, so there is a field to type or
     // paste into. Saved, so rotating the phone does not throw the reader back a step.
@@ -120,21 +122,30 @@ internal fun Editor(
     when {
         reading != null -> Reading(reading, readingProgress, modifier)
 
-        text.isNotEmpty() || composing -> Document(
-            text = text,
-            source = source,
-            photoPages = photoPages,
-            onText = onText,
-            onScan = onScan,
-            onChecks = onChecks,
-            onPhoto = onPhoto,
-            onStartOver = {
+        text.isNotEmpty() || composing -> {
+            // Back from the lease returns to the ways in, as Start over does, instead of
+            // closing the app. The camera registers its back before a page arrives here, so
+            // the caller turns this off while the camera is open or it would take the press.
+            BackHandler(enabled = backEnabled) {
                 composing = false
                 onText("")
-            },
-            focusOnOpen = composing && text.isEmpty(),
-            modifier = modifier,
-        )
+            }
+            Document(
+                text = text,
+                source = source,
+                photoPages = photoPages,
+                onText = onText,
+                onScan = onScan,
+                onChecks = onChecks,
+                onPhoto = onPhoto,
+                onStartOver = {
+                    composing = false
+                    onText("")
+                },
+                focusOnOpen = composing && text.isEmpty(),
+                modifier = modifier,
+            )
+        }
 
         else -> Start(
             price = price,

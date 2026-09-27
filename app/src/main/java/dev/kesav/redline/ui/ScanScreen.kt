@@ -334,6 +334,9 @@ fun ScanScreen(
                 onOpenSaved = viewModel::openSaved,
                 onForget = { viewModel.forget(it, undoHold) },
                 modifier = content,
+                // Off under the camera, and while the editor fades out after Scan so the
+                // report's own back handler gets the press.
+                backEnabled = !scanning && ui.state is ScanState.Editing,
             )
 
             is ScanState.Scanned -> Results(
@@ -921,12 +924,12 @@ internal fun Results(
                     // cannot say: that the price is paid once and covers every lease.
                     val large = LocalDensity.current.fontScale > 1.3f
                     Text(
-                        // The entitlement is lifetime. Without saying so, the price read as
-                        // the cost of this one lease.
+                        // Unlocks the full report. Kept neutral because offerings can be
+                        // single pass, monthly, annual, or lifetime.
                         text = when {
-                            large -> lead?.let { "$it." } ?: "Paid once."
+                            large -> lead?.let { "$it." } ?: "Unlocks the full report."
                             lead != null -> "$lead: each clause, what it costs you, and a reply to send."
-                            else -> "Paid once: each clause, what it costs you, and a reply to send."
+                            else -> "Unlocks each clause, what it costs you, and a reply to send."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1251,6 +1254,10 @@ private fun ExposureLine(exposure: dev.kesav.redline.Exposure, rent: Long?, alph
     val total = exposure.total(exposure.rent ?: rent)
     val figure = total?.let { money(exposure.symbol, it) } ?: monthsText(exposure.months)
     val spoken = "$figure" + (if (total == null) " of rent" else "") + " written into the flagged clauses"
+    val count = if (exposure.oneOff.size == 1) "in 1 clause" else "in ${exposure.oneOff.size} clauses"
+    // At large font sizes the count beside the figure squeezed "Rent at stake" into two
+    // broken lines, so there it moves under the figure and the column gets the full width.
+    val stacked = LocalDensity.current.fontScale > 1.3f
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1270,12 +1277,9 @@ private fun ExposureLine(exposure: dev.kesav.redline.Exposure, rent: Long?, alph
                 style = FigureStyle.copy(fontSize = 26.sp, lineHeight = 30.sp),
                 color = hero.content,
             )
+            if (stacked) Text(count, style = MaterialTheme.typography.labelMedium, color = hero.muted)
         }
-        Text(
-            text = if (exposure.oneOff.size == 1) "in 1 clause" else "in ${exposure.oneOff.size} clauses",
-            style = MaterialTheme.typography.labelMedium,
-            color = hero.muted,
-        )
+        if (!stacked) Text(count, style = MaterialTheme.typography.labelMedium, color = hero.muted)
     }
 }
 

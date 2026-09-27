@@ -248,7 +248,7 @@ internal fun RiskGauge(
                 layout(p.width, (p.height * 0.84f).toInt()) { p.place(0, 0) }
             }
             .aspectRatio(1f)
-            .semantics(mergeDescendants = true) {
+            .clearAndSetSemantics {
                 contentDescription = "Risk score $score out of 100. ${tier.label}."
             },
         contentAlignment = Alignment.Center,
