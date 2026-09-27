@@ -451,14 +451,15 @@ private fun PriceLine(price: PriceLead?) {
         )
         Text(
             text = buildAnnotatedString {
-                append("The scan, the score and the count are free. The full report is ")
+                append("The scan, the score and the count are free. ")
                 if (price != null) {
+                    append("The full report is ")
                     if (price.from) append("from ")
                     withStyle(FigureStyle.toSpanStyle().copy(color = scheme.onSurface)) { append(price.price) }
                     price.per?.let { append(" a $it") }
                     append(if (price.once) ", paid once." else ".")
                 } else {
-                    append("paid once.")
+                    append("The full report unlocks with a plan.")
                 }
             },
             style = MaterialTheme.typography.bodyMedium,

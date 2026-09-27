@@ -351,7 +351,7 @@ fun ScanScreen(
                 onShare = { scope.launch { context.startActivity(shareReport(context, state)) } },
                 onLetter = { letterFor = state },
                 pro = ui.pro,
-                lead = priceLead(ui.offers)?.text ?: ui.offer?.product?.price?.formatted?.let { "$it, paid once" },
+                lead = priceLead(ui.offers)?.text ?: ui.offer?.product?.price?.formatted,
                 onDocument = { focus -> reading = focus ?: -1 },
                 rent = ui.rent,
                 onRent = viewModel::setRent,
@@ -595,7 +595,7 @@ internal fun Results(
     onPlace: () -> Unit = {},
     pitch: String? = null,
     pro: Boolean = unlocked,
-    lead: String? = price?.let { "$it, paid once" },
+    lead: String? = price,
     onDocument: (Int?) -> Unit = {},
     onDraft: () -> Unit = onLetter,
     onCompare: () -> Unit = {},
@@ -1091,8 +1091,8 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
     val flagged = state.flaggedClauses
     val insight = state.insight
     val heading = when {
-        flagged == 0 -> "Nothing matched"
         !state.looksLikeLease -> "This does not read like a lease"
+        flagged == 0 -> "Nothing matched"
         else -> "$flagged of ${state.clauseCount} clauses could cost you money"
     }
 
@@ -1213,8 +1213,8 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                 Text(
                     text = when {
                         !locked -> "Most serious first. Each one quotes the clause it came from."
-                        rest == 1 -> "The first is below, free. The other one opens with a single payment."
-                        else -> "The first is below, free. The other $rest open with a single payment."
+                        rest == 1 -> "The first is below, free. The other one opens with the full report."
+                        else -> "The first is below, free. The other $rest open with the full report."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = hero.muted,
