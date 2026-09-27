@@ -31,7 +31,7 @@ Every screenshot in this README is rendered from the app's own Compose code by t
 - **What it does:** reads a lease on the phone (a PDF, a camera scan, a shared file or pasted text) and runs 38 rules over it: late fees, deposits, leaving early, entry rights and upkeep, quoting the exact clause and citing tenant law for six places.
 - **What you see:** a lease card that tilts in 3D under your finger, a 0 to 100 risk gauge, a four-part bento grid, highlighter strokes under each flagged clause, a reply drafter, and a side-by-side comparison of two leases.
 - **Free:** the scan, the gauge, the bento grid, the clause count, the first flagged clause in full, the topic of every locked clause, and the list of all 38 checks.
-- **Paid:** two plans read from the RevenueCat offering, **Pro by the month** and **Renter Pro for good** for every lease plus the comparison, both under the `full_report` entitlement.
+- **Paid:** **Renter Pro**, read from the RevenueCat offering and sold for good or by the month, unlocks every lease plus the comparison under the `full_report` entitlement.
 - **Private by construction:** OCR and every rule run on the phone, there is no account, and Renter Pro comes back after a reinstall with no sign-in.
 
 ## Product experience
@@ -56,18 +56,12 @@ Scans are saved on the phone. Open two and a butterfly chart sets their risk aga
 
 ## Verify the monetization in 60 seconds
 
-<p align="center">
-  <img src="docs/paywall.png" alt="Paywall with the This lease and Renter Pro plans, rendered by PaywallShotTest with test prices" width="31%" />
-</p>
-
-The paywall above is rendered by `PaywallShotTest` with test prices. The installed app shows whatever the store returns.
-
 - **Entitlement:** `full_report`, defined in `Billing.kt` and read from `CustomerInfo`.
 - **After the scan, never before it:** the scan always runs to completion and the count is honest. A lease with only one flagged clause, or text that is not a lease, is shown in full for free, so the paywall never asks money for nothing.
-- **Plans from the offering:** `Offers.kt` reads the packages from the RevenueCat offering. Lifetime, annual and monthly packages become Renter Pro, and a custom package whose id names a pass becomes This lease. No price is written in the app code.
+- **Plans from the offering:** `Offers.kt` reads the packages from the RevenueCat offering. Lifetime, annual and monthly packages become Renter Pro. A custom package whose id named a pass would become This lease; the current offering has none. No price is written in the app code.
 - **Honest price line:** "From" appears only when more than one plan is on offer, and "paid once" only when no plan recurs. The price shows on the home screen before any scan, so nobody meets it for the first time behind a lock.
 - **Honest button state:** the report is drawn locked until `CustomerInfo` answers, and the buy button stays disabled until ownership is known, so a paid report never flashes open and nobody is asked to buy what they own.
-- **Restore without an account:** the RevenueCat app user ID is a salted SHA-256 hash of `ANDROID_ID`, which Android fixes per signing key, user and device. On a real device, Renter Pro survived an uninstall and reinstall: the report opened in full on first launch, before Restore was tapped. A This lease pass is stored on the phone and does not survive an uninstall.
+- **Restore without an account:** the RevenueCat app user ID is a salted SHA-256 hash of `ANDROID_ID`, which Android fixes per signing key, user and device. On an Android 16 emulator (API 36), Renter Pro survived an uninstall and reinstall: the report opened in full on first launch, before Restore was tapped.
 - **Offline:** without a network the scan still runs and the paywall waits. An `UpdatedCustomerInfoListener` applies entitlement changes as they arrive, with no restart.
 - **No keys in the repo:** `BuildConfig.REVENUECAT_API_KEY` comes from `local.properties`. Built without one, the app compiles and scans, and the paywall stays locked.
 
