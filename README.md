@@ -1,108 +1,115 @@
+<p align="center">
+  <img src="docs/banner.png" alt="Redline: reads your lease and marks the clauses that cost you money. On-device OCR, no account, scans offline." width="100%" />
+</p>
+
 # Redline
 
-Reads a rental lease on the phone and points at the clauses that could cost you money.
+**Reads a rental lease on your phone and marks, in red, every clause that could cost you money.**
 
-Built by a student for the Next Gen Award and the RevenueCat Design Award at RevenueCat Shipaton 2026.
+A lease arrives with twenty minutes to sign it. The clauses that take your money are the quiet ones: a deposit of ten months' rent, a refund that waits ninety days, repairs deducted "in the landlord's sole discretion". Redline finds each one, works out what it costs you and, where a local law caps it, cites the statute. The lease text never leaves the phone. No account, no login, no upload.
 
-Everything that touches the lease runs directly on the device. No account and no server upload. Open the PDF your landlord sent, scan paper pages with the camera, or paste the text: text extraction, OCR, and risk analysis happen locally on the phone. The lease never leaves the device. The app connects to RevenueCat only to display pricing and process payments.
+**Next Gen Award entry, RevenueCat Shipaton 2026.** Built by a student. Open-source Android app, demo video and this repository, with no store listing, as the Next Gen rules allow.
+
+**Try it in one minute:** install `app-release.apk` from the [v1.0.0 release](https://github.com/Kesav2k04/redline/releases/tag/v1.0.0), tap **No lease to hand? Open a sample lease**, and turn on airplane mode first if you like. The scan runs entirely on the phone.
 
 <p align="center">
-  <img src="docs/start.png" alt="Start screen: 3D tilting lease hero, three ways to import, and sample lease" width="31%" />
-  <img src="docs/report.png" alt="Report screen: 0-100 radial risk gauge, stated exposure, and void clause notices" width="31%" />
-  <img src="docs/bento.png" alt="Bento grid: category risk breakdown across money, entry, exit, and upkeep" width="31%" />
+  <img src="docs/start.png" alt="Start screen: a lease card drawn in 3D that tilts under a finger, three ways to bring a lease in, and the sample lease" width="31%" />
+  <img src="docs/report.png" alt="Report: the 0 to 100 risk gauge, the money the lease states, and clauses with no effect under local law" width="31%" />
+  <img src="docs/bento.png" alt="Bento grid: risk split across money, entry, leaving early and upkeep" width="31%" />
 </p>
 
 <p align="center">
-  <img src="docs/document-open.png" alt="Document viewer: physical ink highlighter marks under clauses with margin jump rail" width="31%" />
-  <img src="docs/draft.png" alt="Negotiation drafter: formal email and concise WhatsApp counter-proposals" width="31%" />
-  <img src="docs/compare.png" alt="Compare screen: side-by-side lease comparison with butterfly risk bars" width="31%" />
+  <img src="docs/document-open.png" alt="Document viewer: highlighter strokes under flagged clauses and a rail showing where each one sits" width="31%" />
+  <img src="docs/draft.png" alt="Reply drafter: a formal email and a short WhatsApp message to the landlord" width="31%" />
+  <img src="docs/compare.png" alt="Compare: two saved leases side by side on a butterfly chart" width="31%" />
 </p>
 
-The scan always runs to completion and the count is honest. The first flagged clause is free in full, with the exact sentence it came from, the financial calculation, and what to ask for instead. The purchase opens the remaining clauses, the complete marked document viewer, the counter-proposal drafter, and side-by-side lease comparison.
+Every screenshot in this README is rendered from the app's own Compose code by the Roborazzi tests in `app/src/test` (`./gradlew :app:testDebugUnitTest -Pshots`), so each image is the real interface, not a mockup.
 
 ## In five lines
 
-- **What it does:** Reads a lease on the device (PDF, in-app CameraX scan, file share, or paste) and checks 38 rules across late fees, deposit locks, liability waivers, entry rights, and upkeep traps, quoting the exact clause and citing local tenant statutes for six jurisdictions.
-- **Visceral UI:** Interactive 3D tilting lease hero with spring physics, 0-100 radial risk gauge, 4-category bento grid, physical marker ink document viewer with margin jump rail, counter-proposal drafter, and side-by-side comparison with butterfly bars.
-- **Free:** The scan, 0-100 risk score, category bento, honest clause count, the first flagged clause in full, subjects of all locked clauses, and the complete 38-rule inspection catalog.
-- **Paid, honest pricing:** Single Lease Pass ($1.99) for one lease, or Renter Pro ($4.99) for unlimited scans and side-by-side comparison, powered by RevenueCat under the `full_report` entitlement.
-- **Privacy and offline guarantee:** Zero cloud processing for lease text. No accounts, no tracker SDKs, and purchases restore across uninstalls via a salted SHA-256 hash of the device signing scope.
+- **What it does:** reads a lease on the phone (a PDF, a camera scan, a shared file or pasted text) and runs 38 rules over it: late fees, deposits, leaving early, entry rights and upkeep, quoting the exact clause and citing tenant law for six places.
+- **What you see:** a lease card that tilts in 3D under your finger, a 0 to 100 risk gauge, a four-part bento grid, highlighter strokes under each flagged clause, a reply drafter, and a side-by-side comparison of two leases.
+- **Free:** the scan, the gauge, the bento grid, the clause count, the first flagged clause in full, the topic of every locked clause, and the list of all 38 checks.
+- **Paid:** two plans read from the RevenueCat offering, **This lease** for one lease and **Renter Pro** for every lease plus the comparison, both under the `full_report` entitlement.
+- **Private by construction:** OCR and every rule run on the phone, there is no account, and Renter Pro comes back after a reinstall with no sign-in.
 
 ## Product experience
 
-### In-app camera scanner
-Photograph paper leases directly inside the app with CameraX. A live ML Kit text recognition pipeline analyzes preview frames at 30 fps, drawing bounding boxes over recognized text and signalling when text is stable. Includes haptic shutter feedback, torch toggle, and multi-page capture queues.
+### The scan
+Photograph a paper lease inside the app. CameraX feeds ML Kit text recognition about five times a second, boxes appear over the text it has found, and the screen tells you when the page is steady enough to shoot. The shutter answers with a haptic tap, the torch is one button away, and a long lease goes in page by page in one scan.
 
-### Interactive 3D lease hero
-The home screen features a 3D contract card rendered in Compose graphics layers with spatial spring physics. Dragging the card tilts the page with realistic lighting glares and depth parallax, reacting to pointer position and snapping back on release.
+### The lease card
+The start screen holds a lease drawn in 3D with Compose graphics layers. Drag it and the page tilts under your finger; let go and a spring brings it back.
 
-### Radial risk gauge and bento grid
-The report leads with a 0 to 100 risk gauge drawn with a sweep gradient:
-- **Low Risk (0-29):** Standard terms with fair protections.
-- **Caution (30-59):** Unbalanced clauses that warrant negotiation.
-- **Toxic Clauses (60-100):** Serious financial exposure or void terms.
+### The report
+A 0 to 100 gauge drawn with a sweep gradient leads the report: **Low risk** under 30, **Caution** from 30 to 59, **Toxic clauses** from 60. Under it, the bento grid splits the risk into Financial exposure, Privacy & entry, Termination traps and Maintenance shifting. A money card works out the sums the lease itself states, so the tenant reads a figure rather than a warning. Where a clause has no effect under local law, a separate card names the law.
 
-Under the gauge, the bento grid splits risk into four distinct pillars: Financial exposure, Privacy & entry, Termination traps, and Maintenance shifting.
+### The document
+The whole lease, set in Source Serif, with every flagged clause marked by an irregular highlighter stroke drawn under the text. Tap a mark to open the finding. A rail down the right edge shows where every mark sits.
 
-### Stated financial exposure and void clauses
-Redline calculates actual stated monetary exposure: deposit multiples, late fee caps, lock-in rent totals, and utility shift surcharges. Where a clause violates regional law, a dedicated alert cites the specific statute (such as England's Tenant Fees Act 2019 or New York Housing Stability and Tenant Protection Act).
+### The reply
+Finding the problem is half the job; the tenant still has to answer the landlord. Redline drafts the reply as a formal email or a short WhatsApp message, in a friendly or a firm tone.
 
-### Physical ink document viewer
-Renders the complete lease in Source Serif with generous line height and margin clause numbers. Flagged clauses feature irregular marker highlighter strokes drawn beneath the text. Tapping any mark expands the finding details. A right-hand jump rail shows marker locations across the entire document for quick navigation.
-
-### Negotiation counter-proposal drafter
-Finding a problem is only half the work; the tenant still needs to reply. Redline generates ready-to-send counter-proposals in two formats:
-- **Formal Email:** Professional, structured negotiation letters citing statutory caps and asking for specific clause modifications.
-- **Concise WhatsApp:** Direct, friendly text summaries built for landlords or brokers who communicate by chat.
-
-### Side-by-side lease comparison
-Tenants comparing two apartments can save scans into local storage and view them side by side. Redline plots paired butterfly risk bars across all four categories, highlights score differences, and marks which lease is safer for each issue.
+### Two flats, side by side
+Scans are saved on the phone. Open two and a butterfly chart sets their risk against each other across all four categories.
 
 ## Verify the monetization in 60 seconds
 
-- **Entitlement identifier:** `full_report`, defined in `Billing.kt`.
-- **Honest price presentation:** The button price comes dynamically from the RevenueCat offering, never hardcoded strings. If multiple packages exist, the label shows "From $X" only when tiers differ, and "paid once" only when every plan is non-recurring.
-- **No purchase ambush:** The price appears on the home screen before the user scans, and on the bottom bar of the report.
-- **Tiered paywall:** Supports both a Single Lease Pass ($1.99 one-time consumable) and Renter Pro ($4.99 lifetime or recurring subscription). Single passes grant immediate access to the current lease report, while Renter Pro provides unlimited scans, side-by-side comparison, and negotiation drafting.
-- **Honest button state:** The purchase button stays disabled until `Billing.known` confirms entitlement state from `CustomerInfo`. A paid report is never shown and then abruptly locked, and users are never prompted to buy what they already own.
-- **Offline resilience:** If launched without network, the paywall does not crash or trap the user. When a network connection returns, RevenueCat re-fetches the offering, and an `UpdatedCustomerInfoListener` synchronizes entitlement state without requiring an app restart.
-- **Account-free restoration:** Purchases are tied to an anonymous app user ID derived from a salted SHA-256 hash of the device signing scope (`ANDROID_ID`). A user who uninstalls and reinstalls the app recovers their purchase on the first launch without tapping restore.
-- **Zero API keys committed:** `BuildConfig.REVENUECAT_API_KEY` is loaded from `local.properties`. When built without a key, the app compiles, runs, and completes scans with the paywall safely in sandbox mode.
+<p align="center">
+  <img src="docs/paywall.png" alt="Paywall with the This lease and Renter Pro plans, rendered by PaywallShotTest with test prices" width="31%" />
+</p>
+
+The paywall above is rendered by `PaywallShotTest` with test prices. The installed app shows whatever the store returns.
+
+- **Entitlement:** `full_report`, defined in `Billing.kt` and read from `CustomerInfo`.
+- **After the scan, never before it:** the scan always runs to completion and the count is honest. A lease with only one flagged clause, or text that is not a lease, is shown in full for free, so the paywall never asks money for nothing.
+- **Plans from the offering:** `Offers.kt` reads the packages from the RevenueCat offering. Lifetime, annual and monthly packages become Renter Pro, and a custom package whose id names a pass becomes This lease. No price is written in the app code.
+- **Honest price line:** "From" appears only when more than one plan is on offer, and "paid once" only when no plan recurs. The price shows on the home screen before any scan, so nobody meets it for the first time behind a lock.
+- **Honest button state:** the report is drawn locked until `CustomerInfo` answers, and the buy button stays disabled until ownership is known, so a paid report never flashes open and nobody is asked to buy what they own.
+- **Restore without an account:** the RevenueCat app user ID is a salted SHA-256 hash of `ANDROID_ID`, which Android fixes per signing key, user and device. On a real device, Renter Pro survived an uninstall and reinstall: the report opened in full on first launch, before Restore was tapped. A This lease pass is stored on the phone and does not survive an uninstall.
+- **Offline:** without a network the scan still runs and the paywall waits. An `UpdatedCustomerInfoListener` applies entitlement changes as they arrive, with no restart.
+- **No keys in the repo:** `BuildConfig.REVENUECAT_API_KEY` comes from `local.properties`. Built without one, the app compiles and scans, and the paywall stays locked.
+
+## What leaves the phone
+
+- **The lease text: nothing.** OCR is ML Kit text recognition 16.0.1, bundled in the APK with its model (about 11 MB per ABI), so a scan works in airplane mode.
+- **RevenueCat** is contacted for prices, purchases and restores.
+- **Google's ML Kit library** sends its own usage diagnostics (device, app and performance data, not the recognised text), as described in its [data disclosure](https://developers.google.com/ml-kit/android-data-disclosure).
 
 ## Why rules instead of embeddings
 
-Sentence embeddings were tested and rejected early in development.
+Thirty real lease clauses (twenty costly, ten benign) were labelled before a rule was written, with two pass marks set in advance: the right category for at least 14 of the 20, and true-positive margins at least three times the benign margin.
 
-Thirty real lease clauses (twenty costly and ten benign) were labelled before the rules were written. Two acceptance targets were set in advance: correct category identification on at least fourteen of twenty, and true-positive margins at least three times the benign margin.
-
-| Approach | Costly clauses caught | Benign clauses left alone |
+| Approach | Costly clauses caught | Margin ratio (pass needs 3x) |
 |---|---|---|
-| Embeddings (Universal Sentence Encoder) | 8 / 20 | 2 of 10 scored above median correct match |
-| Deterministic rules | **20 / 20** | **10 / 10** |
+| Embeddings (Universal Sentence Encoder, two runs) | 8 / 20 | 1.14x and 0.89x |
+| Deterministic rules | 20 / 20, benign 10 / 10 | not applicable |
 
-The failure mode with embeddings was not just low recall; it was high false-positive confidence on harmless clauses. A clause stating that the tenant pays their own electricity scored higher than sixteen truly dangerous clauses.
+The embeddings did worse than miss. A clause saying the tenant pays their own electricity scored higher than sixteen of the twenty costly clauses. The rules were written with those thirty clauses open, so their result only proves they fire where intended. The fairer numbers come from clauses they had never seen:
 
-Rules provide what probabilistic models cannot:
-1. Exact sentence citations behind every flag.
-2. Identical, deterministic output on every run.
-3. Zero network latency and zero inference cost per scan.
+| Set | Costly caught | Benign left alone |
+|---|---|---|
+| Held-out clauses, written afterwards in different wording | 4 / 5 | 5 / 5 |
+| United States leases | 18 / 26 | 25 / 29 |
+| English leases | 13 / 19 | 20 / 20 |
+
+Rules give three things a model cannot: the exact sentence behind every flag, the same output on every run, and no network or inference cost per scan. When no rule fires, the report says "Nothing matched" rather than calling the lease clean. The misses and their reasons are written up in [`eval/README.md`](eval/README.md).
 
 ## Regional statutory support
 
-The app checks local tenant protections for six jurisdictions, shifting thresholds and citing legislation directly:
-
-| Jurisdiction | Security deposit cap | Deposit return deadline | Late fee restriction | Governing statute |
+| Place | Deposit cap | Deposit back within | Late fees | Law cited |
 |---|---|---|---|---|
-| California | 1 month rent (2 for small landlords) | 21 days | Fair estimate of actual costs | Cal. Civ. Code § 1950.5 |
-| New York | 1 month rent | 14 days | Lesser of $50 or 5% of monthly rent | N.Y. Real Prop. Law § 238-a |
-| Massachusetts | 1 month rent | 30 days | Prohibited until 30 days overdue | Mass. Gen. Laws ch. 186, § 15B |
-| Texas | No statutory cap | 30 days | Presumed reasonable up to 10-12% | Tex. Prop. Code § 92.019 |
-| England | 5 weeks rent | 10 days from agreement | Default fees capped; 3% above base rate | Tenant Fees Act 2019 |
-| India | 2 months rent (Model Tenancy Act) | At handover | Presumed notice terms | Model Tenancy Act 2021 |
+| California | 1 month (2 for small landlords) | 21 days | Fair estimate of the landlord's cost | Civil Code 1950.5, 1671 |
+| New York | 1 month | 14 days | Only after 5 days late; lesser of $50 or 5% | General Obligations Law 7-108, Real Property Law 238-a |
+| Massachusetts | 1 month | 30 days | None until rent is 30 days overdue | M.G.L. ch. 186 § 15B |
+| Texas | No cap | 30 days after a forwarding address | 12% (four homes or fewer) or 10%, after 2 full days | Property Code 92.103, 92.019 |
+| England | 5 weeks' rent (6 at £50,000 a year or more) | 10 days from agreement | No fee; interest at most 3% over base rate, once 14 days late | Tenant Fees Act 2019 |
+| India | None in most states; the Model Tenancy Act proposes 2 months, Tamil Nadu sets 3 | No figure used | No figure used | Model Tenancy Act 2021 |
 
 ## Build and run
 
-Requires Android SDK 36 and JDK 17 or newer.
+Requires Android SDK 36 and JDK 17 or newer. No API key is needed to build or test.
 
 ```bash
 git clone https://github.com/Kesav2k04/redline.git
@@ -111,9 +118,9 @@ cd redline
 ./gradlew :app:testDebugUnitTest
 ```
 
-The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
+167 unit tests, 0 failures, 1 skipped. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
-To generate Roborazzi screenshot verification tests:
+To regenerate the screenshots in this README with the Roborazzi tests:
 
 ```bash
 ./gradlew :app:testDebugUnitTest -Pshots
@@ -121,10 +128,9 @@ To generate Roborazzi screenshot verification tests:
 
 ## Accessibility
 
-- **Unified screen reader announcements:** Every finding card reads as a single cohesive statement including the issue, consequence, and quoted clause text.
-- **Accessible touch targets:** All interactive surfaces maintain at least 48dp touch targets.
-- **Full scale support:** Layouts adapt to 200% system font scaling without clipping text or primary actions.
-- **Reduced motion support:** Motion animations respect Android's system `ANIMATOR_DURATION_SCALE` setting, skipping transitions when animations are disabled.
+- Motion follows Android's animator duration scale, so with animations off, transitions are skipped.
+- Screens are render-tested at 200% font scale.
+- Rows and buttons hold a 48dp minimum touch target.
 
 ## Legal notice
 
