@@ -31,7 +31,7 @@ Every screenshot in this README is rendered from the app's own Compose code by t
 - **What it does:** reads a lease on the phone (a PDF, a camera scan, a shared file or pasted text) and runs 38 rules over it: late fees, deposits, leaving early, entry rights and upkeep, quoting the exact clause and citing tenant law for six places.
 - **What you see:** a lease card that tilts in 3D under your finger, a 0 to 100 risk gauge, a four-part bento grid, highlighter strokes under each flagged clause, a reply drafter, and a side-by-side comparison of two leases.
 - **Free:** the scan, the gauge, the bento grid, the clause count, the first flagged clause in full, the topic of every locked clause, and the list of all 38 checks.
-- **Paid:** two plans read from the RevenueCat offering, **This lease** for one lease and **Renter Pro** for every lease plus the comparison, both under the `full_report` entitlement.
+- **Paid:** two plans read from the RevenueCat offering, **Pro by the month** and **Renter Pro for good** for every lease plus the comparison, both under the `full_report` entitlement.
 - **Private by construction:** OCR and every rule run on the phone, there is no account, and Renter Pro comes back after a reinstall with no sign-in.
 
 ## Product experience
