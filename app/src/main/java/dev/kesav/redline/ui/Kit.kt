@@ -1,10 +1,19 @@
 package dev.kesav.redline.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -52,6 +62,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -212,6 +223,15 @@ internal fun CountUp(
  * and the phone gives one firm tap as it settles, so the verdict arrives as an event rather than
  * as a repaint. Reduced motion shows the final frame at once.
  */
+/**
+ * The risk score, as a precision instrument dial.
+ *
+ * A 240-degree arc with dual-layer recessed track, statutory threshold markers at 0, 30, 60,
+ * and 100, dynamic sweep gradient fill, and a multi-stage luminous indicator jewel at the head.
+ * An ambient radial bloom provides depth behind the dial. Motion uses a non-overshooting
+ * cubic-bezier curve that brakes smoothly into the measured reading, with subtle tactile ticks
+ * at legal tier boundaries and an authoritative confirmation haptic on landing.
+ */
 @Composable
 internal fun RiskGauge(
     score: Int,
@@ -226,15 +246,30 @@ internal fun RiskGauge(
     val haptics = LocalHapticFeedback.current
     val sweep = remember { Animatable(if (animate) 0f else score / 100f) }
     LaunchedEffect(score) {
-        sweep.animateTo(score / 100f, if (animate) RedlineMotion.spatialExpressive() else androidx.compose.animation.core.snap())
+        sweep.animateTo(
+            targetValue = score / 100f,
+            animationSpec = if (animate) {
+                tween(
+                    durationMillis = 1000,
+                    easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f),
+                )
+            } else snap(),
+        )
         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
     }
-    // A light tick every ten points on the way up, so the count is felt as well as seen.
-    var lastDecade by remember { mutableIntStateOf(0) }
+    // Crisp tactile ticks when crossing statutory tier boundaries (30 Caution, 60 Toxic)
+    var passed30 by remember { mutableStateOf(false) }
+    var passed60 by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        snapshotFlow { (sweep.value * 10).toInt() }.collect { d ->
-            if (d > lastDecade) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
-            lastDecade = d
+        snapshotFlow { sweep.value * 100f }.collect { s ->
+            if (s >= 30f && !passed30) {
+                passed30 = true
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            }
+            if (s >= 60f && !passed60) {
+                passed60 = true
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            }
         }
     }
     val tierColor = colors.ofScore(score)
@@ -263,34 +298,72 @@ internal fun RiskGauge(
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = arcSize.width / 2f
 
-            // Ticks just outside the arc.
+            // 1. Subtle ambient depth glow behind the dial
+            val ambientRadius = radius * 0.92f
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        tierColor.copy(alpha = 0.14f * sweep.value),
+                        tierColor.copy(alpha = 0.03f * sweep.value),
+                        Color.Transparent,
+                    ),
+                    center = center,
+                    radius = ambientRadius,
+                ),
+                radius = ambientRadius,
+                center = center,
+            )
+
+            // 2. Inner precision guideline
+            val innerRadius = radius - stroke * 0.85f
+            val innerInset = size.width / 2f - innerRadius
+            drawArc(
+                color = muted.copy(alpha = 0.12f),
+                startAngle = start,
+                sweepAngle = total,
+                useCenter = false,
+                topLeft = Offset(innerInset, innerInset),
+                size = Size(innerRadius * 2, innerRadius * 2),
+                style = Stroke(1.2f * density, cap = StrokeCap.Round),
+            )
+
+            // 3. Calibrated precision ticks around the arc (41 points, major ticks at legal thresholds 0, 30, 60, 100)
             val tickOuter = radius + stroke * 1.35f
             val tickInner = radius + stroke * 0.95f
             for (i in 0..40) {
                 val a = Math.toRadians((start + total * i / 40f).toDouble())
                 val lit = i / 40f <= sweep.value
-                val major = i % 10 == 0
+                // Legal tier boundaries: 0 (start), 12 (score 30 Caution), 24 (score 60 Toxic), 40 (score 100)
+                val thresholdMarker = i == 0 || i == 12 || i == 24 || i == 40
+                val tickColor = when {
+                    thresholdMarker && lit -> tierColor
+                    lit -> tierColor.copy(alpha = 0.85f)
+                    thresholdMarker -> muted.copy(alpha = 0.50f)
+                    else -> muted.copy(alpha = 0.22f)
+                }
+                val extraReach = if (thresholdMarker) stroke * 0.40f else 0f
                 drawLine(
-                    color = if (lit) tierColor.copy(alpha = 0.9f) else muted.copy(alpha = 0.35f),
+                    color = tickColor,
                     start = Offset(center.x + tickInner * cos(a).toFloat(), center.y + tickInner * sin(a).toFloat()),
                     end = Offset(
-                        center.x + (if (major) tickOuter + stroke * 0.25f else tickOuter) * cos(a).toFloat(),
-                        center.y + (if (major) tickOuter + stroke * 0.25f else tickOuter) * sin(a).toFloat(),
+                        center.x + (tickOuter + extraReach) * cos(a).toFloat(),
+                        center.y + (tickOuter + extraReach) * sin(a).toFloat(),
                     ),
-                    strokeWidth = if (major) 2.2f * density else 1.2f * density,
+                    strokeWidth = if (thresholdMarker) 2.6f * density else 1.2f * density,
                     cap = StrokeCap.Round,
                 )
             }
 
+            // 4. Background recessed track
             drawArc(track, start, total, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
 
-            // The fill: a sweep gradient rotated so green sits at the arc's start.
+            // 5. Dynamic multi-stop gradient sweep fill
             val brush = Brush.sweepGradient(
-                0f to colors.low,
-                0.30f to colors.low,
-                0.45f to colors.medium,
-                0.62f to colors.high,
-                1f to colors.high,
+                0.00f to colors.low,
+                0.28f to colors.low,
+                0.42f to colors.medium,
+                0.58f to colors.high,
+                1.00f to colors.high,
                 center = center,
             )
             val filled = total * sweep.value
@@ -298,11 +371,15 @@ internal fun RiskGauge(
                 rotate(start, center) {
                     drawArc(brush, 0f, filled, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 }
-                // The lit end of the needle.
+                // 6. Multi-stage luminous indicator jewel at needle tip
                 val a = Math.toRadians((start + filled).toDouble())
                 val tip = Offset(center.x + radius * cos(a).toFloat(), center.y + radius * sin(a).toFloat())
-                drawCircle(tierColor.copy(alpha = 0.28f), radius = stroke * 1.25f, center = tip)
-                drawCircle(Color.White, radius = stroke * 0.32f, center = tip)
+                // Diffuse ambient bloom
+                drawCircle(tierColor.copy(alpha = 0.28f), radius = stroke * 1.75f, center = tip)
+                // Intense mid halo
+                drawCircle(tierColor.copy(alpha = 0.70f), radius = stroke * 0.95f, center = tip)
+                // Crisp white central pip
+                drawCircle(Color.White, radius = stroke * 0.38f, center = tip)
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -315,7 +392,7 @@ internal fun RiskGauge(
                 )
                 Text(
                     "/100",
-                    style = FigureStyle.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                    style = FigureStyle.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
                     color = muted,
                     modifier = Modifier.padding(bottom = 10.dp, start = 2.dp),
                 )
@@ -328,22 +405,47 @@ internal fun RiskGauge(
 
 @Composable
 internal fun TierChip(tier: Tier, color: Color, modifier: Modifier = Modifier) {
+    val animate = animationsEnabled()
+    val pulse = if (animate) {
+        val infinite = rememberInfiniteTransition(label = "tierPulse")
+        val alpha by infinite.animateFloat(
+            initialValue = 0.55f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pulseAlpha",
+        )
+        alpha
+    } else 1f
+
     Row(
         modifier = modifier
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.16f))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .background(color.copy(alpha = 0.14f))
+            .border(BorderStroke(1.dp, color.copy(alpha = 0.30f)), CircleShape)
+            .padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(color))
-        Text(tier.label, style = MaterialTheme.typography.labelMedium, color = color)
+        Box(
+            Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = pulse)),
+        )
+        Text(
+            text = tier.label,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = color,
+        )
     }
 }
 
 /**
- * A horizontal meter, 0 to 100, that fills on a spring when it first appears. [delayIndex]
- * staggers a group of meters so they fill one after another rather than all at once.
+ * A horizontal meter, 0 to 100, with gradient shimmer fill, recessed track, and luminous cap.
+ * [delayIndex] staggers a group of meters in a choreographed sequence.
  */
 @Composable
 internal fun Meter(
@@ -352,19 +454,41 @@ internal fun Meter(
     modifier: Modifier = Modifier,
     track: Color = MaterialTheme.colorScheme.outlineVariant,
     delayIndex: Int = 0,
-    height: Dp = 6.dp,
+    height: Dp = 7.dp,
 ) {
     val animate = animationsEnabled()
     val fill = remember { Animatable(if (animate) 0f else value / 100f) }
     LaunchedEffect(value) {
-        if (animate) kotlinx.coroutines.delay(120L + delayIndex * 70L)
-        fill.animateTo(value / 100f, if (animate) RedlineMotion.spatialExpressive() else androidx.compose.animation.core.snap())
+        if (animate) kotlinx.coroutines.delay(100L + delayIndex * 60L)
+        fill.animateTo(
+            targetValue = value / 100f,
+            animationSpec = if (animate) {
+                tween(750, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f))
+            } else snap(),
+        )
     }
     Canvas(modifier.fillMaxWidth().height(height)) {
         val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2f)
-        drawRoundRect(track, cornerRadius = r)
+        // Recessed track groove
+        drawRoundRect(track.copy(alpha = 0.30f), cornerRadius = r)
         val w = size.width * fill.value.coerceIn(0f, 1f)
-        if (w > 0f) drawRoundRect(color, size = Size(maxOf(w, size.height), size.height), cornerRadius = r)
+        if (w > 0f) {
+            val barWidth = maxOf(w, size.height)
+            // Gradient fill from deeper tone to vibrant accent
+            val gradient = Brush.horizontalGradient(
+                colors = listOf(color.copy(alpha = 0.65f), color),
+                startX = 0f,
+                endX = barWidth,
+            )
+            drawRoundRect(gradient, size = Size(barWidth, size.height), cornerRadius = r)
+            // Luminous leading edge cap
+            val capRadius = size.height / 2f
+            drawCircle(
+                color = Color.White.copy(alpha = 0.60f),
+                radius = capRadius * 0.40f,
+                center = Offset(barWidth - capRadius, capRadius),
+            )
+        }
     }
 }
 
@@ -467,7 +591,7 @@ private fun TileFigure(score: CategoryScore, tint: Color, large: Boolean = false
     }
 }
 
-/** A category's risk, 0 to 100, as a ring that fills on a spring, with the number inside. */
+/** A category's risk, 0 to 100, as an illuminated ring with radiant glow and luminous pip. */
 @Composable
 internal fun RiskRing(
     value: Int,
@@ -479,16 +603,41 @@ internal fun RiskRing(
     val animate = animationsEnabled()
     val fill = remember { Animatable(if (animate) 0f else value / 100f) }
     LaunchedEffect(value) {
-        if (animate) kotlinx.coroutines.delay(160)
-        fill.animateTo(value / 100f, if (animate) RedlineMotion.spatialExpressive() else androidx.compose.animation.core.snap())
+        if (animate) kotlinx.coroutines.delay(140)
+        fill.animateTo(
+            targetValue = value / 100f,
+            animationSpec = if (animate) {
+                tween(850, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f))
+            } else snap(),
+        )
     }
     Box(modifier.clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val w = size.minDimension * 0.11f
-            val inset = w / 2f
-            val arc = Size(size.width - w, size.height - w)
-            drawArc(track, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(w))
-            drawArc(color, -90f, 360f * fill.value, false, Offset(inset, inset), arc, style = Stroke(w, cap = StrokeCap.Round))
+            val w = size.minDimension * 0.10f
+            val inset = w / 2f + 2.dp.toPx()
+            val arc = Size(size.width - inset * 2, size.height - inset * 2)
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val radius = arc.width / 2f
+            // Ambient radial halo
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(color.copy(alpha = 0.14f * fill.value), Color.Transparent),
+                    center = center,
+                    radius = radius * 0.95f,
+                ),
+                radius = radius * 0.95f,
+                center = center,
+            )
+            // Recessed track
+            drawArc(track.copy(alpha = 0.30f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(w))
+            val sweepAngle = 360f * fill.value
+            if (sweepAngle > 0.5f) {
+                drawArc(color, -90f, sweepAngle, false, Offset(inset, inset), arc, style = Stroke(w, cap = StrokeCap.Round))
+                val a = Math.toRadians((-90f + sweepAngle).toDouble())
+                val tip = Offset(center.x + radius * cos(a).toFloat(), center.y + radius * sin(a).toFloat())
+                drawCircle(color.copy(alpha = 0.45f), radius = w * 1.4f, center = tip)
+                drawCircle(Color.White, radius = w * 0.40f, center = tip)
+            }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text((fill.value * 100).roundToInt().toString(), style = FigureStyle.copy(fontSize = 26.sp, lineHeight = 28.sp), color = color)
