@@ -288,8 +288,11 @@ internal fun termsLine(offer: Offer?): String = when (offer?.plan) {
     Plan.PRO_LIFETIME -> "One payment of ${offer.price}. Every lease you scan, for as long as you keep the app. No subscription."
     Plan.PRO_ANNUAL, Plan.PRO_MONTHLY -> {
         val every = if (offer.plan == Plan.PRO_ANNUAL) "year" else "month"
-        (offer.trial?.let { "$it, then " } ?: "") +
-            "${offer.price} a $every until you cancel in the store. Cancel before the trial ends and nothing is charged."
+        if (offer.trial != null) {
+            "${offer.trial}, then ${offer.price} a $every until you cancel in the store. Cancel before the trial ends and nothing is charged."
+        } else {
+            "${offer.price} a $every until you cancel in the store."
+        }
     }
 }
 
