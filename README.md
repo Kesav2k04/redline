@@ -31,8 +31,16 @@ Every screenshot in this README is rendered from the app's own Compose code by t
 - **What it does:** reads a lease on the phone (a PDF, a camera scan, a shared file or pasted text) and runs 38 rules over it: late fees, deposits, leaving early, entry rights and upkeep, quoting the exact clause and citing tenant law for six places.
 - **What you see:** a lease card that tilts in 3D under your finger, a 0 to 100 risk gauge, a four-part bento grid, highlighter strokes under each flagged clause, a reply drafter, and a side-by-side comparison of two leases.
 - **Free:** the scan, the gauge, the bento grid, the clause count, the first flagged clause in full, the topic of every locked clause, and the list of all 38 checks.
-- **Paid:** **Renter Pro**, read from the RevenueCat offering and sold for good or by the month, unlocks every lease plus the comparison under the `full_report` entitlement.
+- **Paid:** **Renter Pro**, read from the RevenueCat offering and sold for good or by the month, opens every lease plus the comparison under the `full_report` entitlement.
 - **Private by construction:** OCR and every rule run on the phone, there is no account, and Renter Pro comes back after a reinstall with no sign-in.
+
+## How it works
+
+<p align="center">
+  <img src="docs/architecture-pipeline.svg" alt="Scan pipeline: the lease is read with bundled ML Kit OCR, checked by LeaseCheck, run through 38 clause rules with the tenant law of six places, scored across four categories and shown as a 0 to 100 report, all inside the phone. The entitlement gate reads full_report from RevenueCat, the one call that crosses the line." width="100%" />
+</p>
+
+Everything inside the dashed line runs on the phone, so document analysis needs no server and a scan works in airplane mode. ML Kit reads the page with a model bundled in the APK, `LeaseCheck` turns away text that is not a lease, and the 38 rules in `Rules.kt` run over each clause with the tenant law of the chosen place beside them. `Insight.kt` scores the findings as `100 * (1 - exp(-weight / 40))`, where a serious clause weighs 10 and one worth checking weighs 4, and splits the risk across the four categories. The one line that crosses the boundary goes to RevenueCat; everything that leaves the phone, and what never does, is listed under [What leaves the phone](#what-leaves-the-phone).
 
 ## Product experience
 
@@ -56,9 +64,15 @@ Scans are saved on the phone. Open two and a butterfly chart sets their risk aga
 
 ## Verify the monetization in 60 seconds
 
+<p align="center">
+  <img src="docs/revenuecat-architecture.svg" alt="Sequence between the app screens, Billing.kt and RevenueCat: configure with a hashed ANDROID_ID as the app user ID, read the full_report entitlement and the current offering at start, purchase only on a lease with two or more flagged clauses, restore with the same app user ID, and apply refunds or late restores from UpdatedCustomerInfoListener." width="100%" />
+</p>
+
+Every call into the RevenueCat SDK sits in `Billing.kt`. The screens read its state, and `Offers.kt` only sorts the packages it returns.
+
 - **Entitlement:** `full_report`, defined in `Billing.kt` and read from `CustomerInfo`.
 - **After the scan, never before it:** the scan always runs to completion and the count is honest. A lease with only one flagged clause, or text that is not a lease, is shown in full for free, so the paywall never asks money for nothing.
-- **Plans from the offering:** `Offers.kt` reads the packages from the RevenueCat offering. Lifetime, annual and monthly packages become Renter Pro. A custom package whose id named a pass would become This lease; the current offering has none. No price is written in the app code.
+- **Plans from the offering:** `Offers.kt` reads the packages from the RevenueCat offering. Lifetime, annual and monthly packages become Renter Pro; the current offering carries a lifetime package (`$rc_lifetime`, a one-time purchase) and a monthly one. A custom package whose id named a pass would become This lease; the current offering has none. No price is written in the app code.
 - **Honest price line:** "From" appears only when more than one plan is on offer, and "paid once" only when no plan recurs. The price shows on the home screen before any scan, so nobody meets it for the first time behind a lock.
 - **Honest button state:** the report is drawn locked until `CustomerInfo` answers, and the buy button stays disabled until ownership is known, so a paid report never flashes open and nobody is asked to buy what they own.
 - **Restore without an account:** the RevenueCat app user ID is a salted SHA-256 hash of `ANDROID_ID`, which Android fixes per signing key, user and device. On an Android 16 emulator (API 36), Renter Pro survived an uninstall and reinstall: the report opened in full on first launch, before Restore was tapped.
@@ -112,7 +126,7 @@ cd redline
 ./gradlew :app:testDebugUnitTest
 ```
 
-167 unit tests, 0 failures, 1 skipped. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+173 unit tests in 30 suites: 172 pass, 1 is skipped and none fail. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
 To regenerate the screenshots in this README with the Roborazzi tests:
 
