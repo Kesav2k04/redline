@@ -398,7 +398,7 @@ fun ScanScreen(
             ChecksSheet(onDismiss = { showChecks = false })
         }
         val scanned = ui.state as? ScanState.Scanned
-        if (paywall != null && scanned != null) {
+        if (paywall != null && scanned != null && scanned.looksLikeLease) {
             PaywallSheet(
                 state = scanned,
                 offers = ui.offers,
@@ -436,9 +436,7 @@ fun ScanScreen(
     val open = reading
     if (open != null && compared != null) {
         // Without the report, only the first clause's findings are readable in the lease too.
-        val locked = remember(compared, ui.unlocked) {
-            if (ui.unlocked) emptySet() else compared.groups.drop(1).map { it.clause.index }.toSet()
-        }
+        val locked = remember(compared, ui.unlocked) { viewerLocks(compared, ui.unlocked) }
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             DocumentViewer(
                 clauses = compared.clauses,
@@ -473,6 +471,14 @@ fun ScanScreen(
     }
     }
 }
+
+/**
+ * The clauses the marked-up lease keeps shut, by the report's own rule: none once it is open,
+ * and none over text that is not a lease, because a locked finding here leads straight to the
+ * paywall and that text is never sold.
+ */
+internal fun viewerLocks(state: ScanState.Scanned, unlocked: Boolean): Set<Int> =
+    if (unlocked || !state.sellable) emptySet() else state.groups.drop(1).map { it.clause.index }.toSet()
 
 /**
  * What the app looks for, written down where the reader can see it before paying.
