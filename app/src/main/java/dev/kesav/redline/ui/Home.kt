@@ -33,12 +33,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -117,13 +119,19 @@ internal fun Editor(
     onOpenSaved: (SavedLease) -> Unit = {},
     onForget: (String) -> Unit = {},
     backEnabled: Boolean = true,
+    onCancelReading: () -> Unit = {},
 ) {
     // Set by the paste tile when the clipboard is empty, so there is a field to type or
     // paste into. Saved, so rotating the phone does not throw the reader back a step.
     var composing by rememberSaveable { mutableStateOf(false) }
 
     when {
-        reading != null -> Reading(reading, readingProgress, modifier)
+        reading != null -> {
+            // Back stops the read instead of closing the app and losing it. Off under the
+            // camera for the same reason as the handler below.
+            BackHandler(enabled = backEnabled, onBack = onCancelReading)
+            Reading(reading, readingProgress, onCancel = onCancelReading, modifier = modifier)
+        }
 
         text.isNotEmpty() || composing -> {
             // Back from the lease returns to the ways in, as Start over does, instead of
@@ -623,7 +631,7 @@ private fun RedlinedHeadline(before: String, marked: String, after: String, colo
  * the hero, heading bar and red margin rule, so the wait looks like the same lease arriving.
  */
 @Composable
-private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifier) {
+private fun Reading(step: String, progress: Float?, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val moving = animationsEnabled()
     // One way, top to bottom, then back to the top unseen. Going back and forth read as a
@@ -740,6 +748,16 @@ private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifie
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
             )
+        }
+        // The wrong file, or a wait that runs long, needs a way out that keeps the app open.
+        Spacer(Modifier.height(Space.l))
+        TextButton(
+            onClick = onCancel,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.heightIn(min = 48.dp),
+            colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurfaceVariant),
+        ) {
+            Text("Cancel")
         }
     }
 }

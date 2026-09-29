@@ -11,6 +11,7 @@ import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -268,9 +270,13 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     /** A PDF or photo shared or opened from another app. Same rule as [seed]: once. */
     fun seedFile(uri: Uri?) {
-        if (uri == null || _ui.value.text.isNotEmpty() || _ui.value.reading != null) return
+        // Once per file, too, so a read the reader cancelled does not start again on rotation.
+        if (uri == null || uri == seededFile || _ui.value.text.isNotEmpty() || _ui.value.reading != null) return
+        seededFile = uri
         import(uri)
     }
+
+    private var seededFile: Uri? = null
 
     fun edit(text: String) {
         // Typing makes it the reader's text, so the note saying which file it came from
@@ -290,19 +296,17 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         // still being read waits its turn instead of being dropped. Anything else arriving
         // mid-read is refused, as before: it would replace the document being read.
         if (!photo && _ui.value.reading != null) return after()
-        viewModelScope.launch { importLock.withLock {
+        viewModelScope.launch(reads) { try { importLock.withLock {
             _ui.update { it.copy(reading = "Opening the file", readingProgress = null, message = null) }
             // A whole PDF read from its own text layer has nothing to proofread, and
             // parking the reader in front of fourteen pages of it before the verdict only
             // taught them to press Scan without looking. Recognised text still stops in the
             // editor, where a misread figure can be fixed first.
             var straightToScan = false
-            val result = try {
-                LeaseImport.read(getApplication(), uri) { step, done ->
-                    _ui.update { it.copy(reading = step, readingProgress = done) }
-                }
-            } finally {
-                after()
+            val result = LeaseImport.read(getApplication(), uri) { step, done ->
+                // A cancelled read can still report the page it was on, and that must not
+                // bring the Reading screen back.
+                _ui.update { if (isActive) it.copy(reading = step, readingProgress = done) else it }
             }
             when (result) {
                 is LeaseImport.Result.Failed ->
@@ -324,10 +328,27 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 }
             }
             if (straightToScan) scan()
+        } } finally {
+            // Here rather than around the read, so a photo still waiting its turn when the
+            // read is cancelled is deleted all the same.
+            after()
         } }
     }
 
     private val importLock = kotlinx.coroutines.sync.Mutex()
+
+    /** Parent of every read in flight or queued, so Cancel stops them all at once. */
+    private var reads = SupervisorJob(viewModelScope.coroutineContext[Job])
+
+    /**
+     * Stops the PDF or photo being read and returns to where the reader was: the ways in, or
+     * the pages already photographed. Nothing from the stopped read reaches the field.
+     */
+    fun cancelImport() {
+        reads.cancel()
+        reads = SupervisorJob(viewModelScope.coroutineContext[Job])
+        _ui.update { it.copy(reading = null, readingProgress = null) }
+    }
 
     private fun describe(read: LeaseImport.Result.Read, photoPages: Int): String {
         val what = when {
