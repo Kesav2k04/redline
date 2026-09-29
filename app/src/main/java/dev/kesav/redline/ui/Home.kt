@@ -298,7 +298,8 @@ private fun Pdf(onOpen: () -> Unit, modifier: Modifier = Modifier) {
         Text(
             "The file your landlord or agent sent",
             style = MaterialTheme.typography.bodySmall,
-            color = scheme.onPrimary.copy(alpha = 0.82f),
+            // Full white: at 0.82 this small line was about 3.7:1 on the red, under AA.
+            color = scheme.onPrimary,
         )
     }
 }
@@ -339,7 +340,7 @@ private fun Way(
                 Text(
                     detail,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (filled) content.copy(alpha = 0.82f) else scheme.onSurfaceVariant,
+                    color = if (filled) content else scheme.onSurfaceVariant,
                 )
             }
         }
