@@ -143,6 +143,7 @@ import android.app.Activity
 import android.content.ContextWrapper
 import android.content.Intent
 import dev.kesav.redline.Place
+import dev.kesav.redline.Billing
 import dev.kesav.redline.ClauseGroup
 import dev.kesav.redline.Scanner
 import dev.kesav.redline.Finding
@@ -395,6 +396,8 @@ fun ScanScreen(
                 onRestore = viewModel::restore,
                 onRetry = viewModel::retryOffer,
                 onDismiss = { paywall = null },
+                // Fixed at launch: set once by Billing.start from the build's key.
+                storeKey = Billing.configured,
             )
         }
         if (choosingPlace) {

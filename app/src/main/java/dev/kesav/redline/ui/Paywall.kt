@@ -83,6 +83,7 @@ internal fun PaywallSheet(
     onRestore: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
+    storeKey: Boolean = true,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = LocalHapticFeedback.current
@@ -98,7 +99,8 @@ internal fun PaywallSheet(
         else -> passOffer?.plan ?: proOffers.firstOrNull()?.plan
     }
     var chosen by rememberSaveable(offers.map { it.plan }) { mutableStateOf(defaultPlan) }
-    LaunchedEffect(offers.isEmpty()) { if (offers.isEmpty()) onRetry() }
+    // Without a store key there is nothing to reach, so asking again would only spin.
+    LaunchedEffect(offers.isEmpty()) { if (offers.isEmpty() && storeKey) onRetry() }
 
     val locked = (state.groups.size - 1).coerceAtLeast(0)
     val serious = state.groups.drop(1).count { it.worst == Severity.HIGH }
@@ -159,9 +161,9 @@ internal fun PaywallSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.m),
                 ) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    if (storeKey) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     Text(
-                        "Reaching the store for prices. Your scan is kept.",
+                        noOffersLine(storeKey),
                         style = MaterialTheme.typography.bodyMedium,
                         color = scheme.onSurfaceVariant,
                     )
@@ -271,6 +273,14 @@ internal fun PaywallSheet(
         }
     }
 }
+
+/**
+ * What stands in for the plan cards while there are no offers. With a store key the wait is
+ * real and ends; a build made without one never gets offers, so it says so once and stops.
+ */
+internal fun noOffersLine(storeKey: Boolean): String =
+    if (storeKey) "Reaching the store for prices. Your scan is kept."
+    else "This build has no store key, so purchases are off. The v1.0.0 Release APK on GitHub has them."
 
 internal fun ctaLabel(offer: Offer?): String = when {
     offer == null -> "Choose a plan"
