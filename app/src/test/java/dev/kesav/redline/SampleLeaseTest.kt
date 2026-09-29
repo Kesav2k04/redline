@@ -1,6 +1,7 @@
 package dev.kesav.redline
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,5 +41,22 @@ class SampleLeaseTest {
             "every finding must name its clause",
             findings.all { it.clause.text.isNotBlank() && it.reason.isNotBlank() },
         )
+    }
+
+    @Test
+    fun `the sample report keeps the numbers the demo shows`() {
+        // The demo video shows these figures. A rule change that moves any of them has to
+        // be a decision, not a side effect.
+        val text = File("src/main/assets/sample_lease.txt").readText()
+        val clauses = ClauseSplitter.split(text)
+        val scanned = ScanState.Scanned(clauses.size, Scanner.ranked(clauses), LeaseCheck.looksLikeLease(text), null, clauses)
+
+        assertEquals("clauses", 16, scanned.clauseCount)
+        assertEquals("flagged", 11, scanned.flaggedClauses)
+        assertEquals("serious", 9, scanned.highClauses)
+        assertEquals("worth checking", 2, scanned.flaggedClauses - scanned.highClauses)
+        assertEquals("clear", 5, scanned.clauseCount - scanned.flaggedClauses)
+        assertEquals("score", 91, scanned.insight.score)
+        assertEquals("months of rent at stake", 13.0, scanned.insight.exposure!!.months, 0.001)
     }
 }
