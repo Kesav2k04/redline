@@ -43,7 +43,7 @@ class SemanticsTest {
         RedlineTheme {
             Surface {
                 Results(
-                    state = state, unlocked = unlocked, known = true, busy = false, price = "$4.99",
+                    state = state, unlocked = unlocked, known = true, busy = false, price = "$99.99", lead = "From $9.99",
                     onUnlock = {}, onRestore = {}, onBack = {}, onShare = {}, onLetter = {},
                     onShareCount = {}, onChecks = {},
                 )

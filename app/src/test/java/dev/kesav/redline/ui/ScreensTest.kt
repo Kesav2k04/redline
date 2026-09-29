@@ -71,13 +71,13 @@ class ScreensTest {
 
     @Composable
     private fun Start() = Editor(
-        text = "", price = PriceLead("$4.99", from = false, once = true, per = null), onText = {}, onScan = {}, onSample = {}, onChecks = {},
+        text = "", price = PriceLead("$9.99", from = true, once = false, per = null), onText = {}, onScan = {}, onSample = {}, onChecks = {},
         reading = null, source = null, photoPages = 0, onOpen = {}, onPhoto = {},
     )
 
     @Composable
     private fun Report(unlocked: Boolean) = Results(
-        state = sample(), unlocked = unlocked, known = true, busy = false, price = "$4.99",
+        state = sample(), unlocked = unlocked, known = true, busy = false, price = "$99.99", lead = "From $9.99",
         onUnlock = {}, onRestore = {}, onBack = {}, onShare = {}, onLetter = {},
         onShareCount = {}, onChecks = {},
         // The cap ScanScreen puts on every state, so a wide screen is pictured as it ships.
@@ -108,7 +108,7 @@ class ScreensTest {
         )
         screen {
             Editor(
-                text = "", price = PriceLead("$4.99", from = false, once = true, per = null), onText = {}, onScan = {}, onSample = {}, onChecks = {},
+                text = "", price = PriceLead("$9.99", from = true, once = false, per = null), onText = {}, onScan = {}, onSample = {}, onChecks = {},
                 reading = "Reading page 3 of 5", source = null, photoPages = 0, onOpen = {}, onPhoto = {},
                 readingProgress = 0.4f,
             )
@@ -173,7 +173,7 @@ class ScreensTest {
         val state = ScanState.Scanned(clauses.size, Scanner.ranked(clauses, Place.MASSACHUSETTS))
         screen {
             Results(
-                state = state, unlocked = false, known = true, busy = false, price = "$4.99",
+                state = state, unlocked = false, known = true, busy = false, price = "$99.99", lead = "From $9.99",
                 onUnlock = {}, onRestore = {}, onBack = {}, onShare = {}, onLetter = {},
                 onShareCount = {}, onChecks = {}, place = Place.MASSACHUSETTS,
             )

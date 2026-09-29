@@ -55,8 +55,8 @@ class PaywallShotTest {
     )
 
     private val offers = listOf(
-        offer(Plan.PASS, PackageType.CUSTOM, "lease_pass", "$1.99", 1_990_000),
-        offer(Plan.PRO_LIFETIME, PackageType.LIFETIME, "\$rc_lifetime", "$4.99", 4_990_000),
+        offer(Plan.PRO_LIFETIME, PackageType.LIFETIME, "\$rc_lifetime", "$99.99", 99_990_000),
+        offer(Plan.PRO_MONTHLY, PackageType.MONTHLY, "\$rc_monthly", "$9.99", 9_990_000),
     )
 
     private fun screen(content: @Composable () -> Unit) {
@@ -90,7 +90,7 @@ class PaywallShotTest {
     fun reportSections() {
         screen {
             Results(
-                state = sample(), unlocked = false, known = true, busy = false, price = "$1.99",
+                state = sample(), unlocked = false, known = true, busy = false, price = "$99.99", lead = "From $9.99",
                 onUnlock = {}, onRestore = {}, onBack = {}, onShare = {}, onLetter = {},
                 onShareCount = {}, onChecks = {}, modifier = Modifier.fillMaxSize(),
             )
