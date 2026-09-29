@@ -39,8 +39,8 @@ internal class Limits(
     val asks: Map<String, String> = emptyMap(),
 )
 
-// Every figure below was read at its source on 24 Sep 2026. Working, quotes and the list of
-// things deliberately not claimed: research/limits.md in the project workshop.
+// Every figure below was read at its source on 24 Sep 2026. Places not listed here are
+// deliberately not claimed.
 //
 // California  Civil Code 1950.5 (deposit, as amended by AB 12 from 1 July 2024; return),
 //             1954 (entry), 1671 (late fees as liquidated damages)
