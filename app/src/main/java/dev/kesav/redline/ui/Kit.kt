@@ -1,8 +1,10 @@
 package dev.kesav.redline.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,6 +19,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -27,9 +30,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -52,12 +57,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -177,8 +184,13 @@ internal fun IconBadge(
 
 /** A small uppercase label above a figure. */
 @Composable
-internal fun Eyebrow(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    Text(text.uppercase(), style = EyebrowStyle, color = color, modifier = modifier)
+internal fun Eyebrow(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    style: TextStyle = EyebrowStyle,
+) {
+    Text(text.uppercase(), style = style, color = color, modifier = modifier)
 }
 
 /**
@@ -214,232 +226,228 @@ internal fun CountUp(
     )
 }
 
+/** The eyebrows on the report card: 12 sp where the rest of the app's eyebrows are 11. */
+internal val HeroEyebrowStyle = EyebrowStyle.copy(fontSize = 12.sp, lineHeight = 16.sp)
+
 /**
- * The risk score, as a dial.
- *
- * A 240 degree arc that fills from green through amber to red, with the needle's end lit, and
- * the number counting up inside it in step with the sweep. Forty tick marks sit under the arc
- * so the eye reads position as quantity before it reads the number. The sweep lands on a spring
- * and the phone gives one firm tap as it settles, so the verdict arrives as an event rather than
- * as a repaint. Reduced motion shows the final frame at once.
+ * The dial's geometry, in dp at the reference box of 248 by 196. Every length scales by the
+ * box's width over 248, so a narrow phone gets the same instrument, only smaller.
  */
+private object Dial {
+    const val START = 150f
+    const val SWEEP = 240f
+    val W = 248.dp
+    val H = 196.dp
+    val CX = 124.dp
+    val CY = 124.dp
+    val BAND_R = 104.dp
+    val BAND_W = 10.dp
+    val TICK_OUT = 124.dp
+    val MINOR_LEN = 6.dp
+    val MAJOR_LEN = 10.dp
+    val MINOR_W = 1.dp
+    val MAJOR_W = 1.5.dp
+    val KNOCK_IN = 97.dp
+    val KNOCK_OUT = 111.dp
+    val KNOCK_W = 6.dp
+    val INDEX_IN = 92.dp
+    val INDEX_OUT = 114.dp
+    val INDEX_W = 2.dp
+    val ZONE_GAP = 2.dp
+
+    /** Angle for a score of 0 to 100, in drawArc's convention: 0 is 3 o'clock, clockwise. */
+    fun angle(points: Float) = START + SWEEP * points / 100f
+}
+
 /**
- * The risk score, as a precision instrument dial.
+ * The risk score, as an instrument dial.
  *
- * A 240-degree arc with dual-layer recessed track, statutory threshold markers at 0, 30, 60,
- * and 100, dynamic sweep gradient fill, and a multi-stage luminous indicator jewel at the head.
- * An ambient radial bloom provides depth behind the dial. Motion uses a non-overshooting
- * cubic-bezier curve that brakes smoothly into the measured reading, with subtle tactile ticks
- * at legal tier boundaries and an authoritative confirmation haptic on landing.
+ * A 240 degree scale of fixed ticks, a zone track that shows where Caution and Toxic begin, one
+ * solid band whose length is exactly the score, and a thin index at its end. The band takes the
+ * colour of the tier of the value shown, so it turns amber as the index passes 30 and crimson
+ * as it passes 60. It sweeps once, slowing into the reading and never overshooting, longer for a
+ * higher score, and the phone gives one firm tap as it lands. [start] holds the sweep back until
+ * the panel around the dial has settled. Reduced motion shows the final frame at once.
  */
 @Composable
 internal fun RiskGauge(
     score: Int,
     tier: Tier,
     modifier: Modifier = Modifier,
-    track: Color = LocalHero.current.muted.copy(alpha = 0.18f),
-    content: Color = LocalHero.current.content,
-    muted: Color = LocalHero.current.muted,
+    start: Boolean = true,
 ) {
-    val colors = risk
+    val hero = LocalHero.current
     val animate = animationsEnabled()
     val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val fontScale = density.fontScale
     val sweep = remember { Animatable(if (animate) 0f else score / 100f) }
-    LaunchedEffect(score) {
-        sweep.animateTo(
-            targetValue = score / 100f,
-            animationSpec = if (animate) {
-                tween(
-                    durationMillis = 1000,
-                    easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f),
-                )
-            } else snap(),
-        )
+    val labelAlpha = remember { Animatable(if (animate) 0f else 1f) }
+    LaunchedEffect(score, start) {
+        if (!start) return@LaunchedEffect
+        if (animate) {
+            sweep.animateTo(score / 100f, tween(500 + 6 * score, easing = RedlineMotion.Decelerate))
+            labelAlpha.animateTo(1f, tween(160, easing = LinearEasing))
+        } else {
+            sweep.snapTo(score / 100f)
+            labelAlpha.snapTo(1f)
+        }
         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
     }
-    // Crisp tactile ticks when crossing statutory tier boundaries (30 Caution, 60 Toxic)
-    var passed30 by remember { mutableStateOf(false) }
-    var passed60 by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        snapshotFlow { sweep.value * 100f }.collect { s ->
-            if (s >= 30f && !passed30) {
-                passed30 = true
-                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-            }
-            if (s >= 60f && !passed60) {
-                passed60 = true
-                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+    // A tap at each tier boundary the index crosses. With motion off they would all land in one
+    // frame, on top of the confirmation, so they are left out.
+    if (animate) {
+        LaunchedEffect(Unit) {
+            var passed30 = false
+            var passed60 = false
+            snapshotFlow { sweep.value * 100f }.collect { s ->
+                if (s >= 30f && !passed30) {
+                    passed30 = true
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                }
+                if (s >= 60f && !passed60) {
+                    passed60 = true
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                }
             }
         }
     }
-    val tierColor = colors.ofScore(score)
 
-    Box(
-        modifier = modifier
-            // The arc is open at the bottom, so the square it is drawn in reports only the part
-            // with ink in it and the text below sits up against the dial.
-            .layout { m, c ->
-                val p = m.measure(c)
-                layout(p.width, (p.height * 0.84f).toInt()) { p.place(0, 0) }
-            }
-            .aspectRatio(1f)
-            .clearAndSetSemantics {
-                contentDescription = "Risk score $score out of 100. ${tier.label}."
-            },
-        contentAlignment = Alignment.Center,
+    val shown = (sweep.value * 100f).roundToInt()
+    val bandColor by animateColorAsState(
+        targetValue = dialColor(shown),
+        animationSpec = if (animate) tween(120, easing = LinearEasing) else snap(),
+        label = "band",
+    )
+    val tierColor = dialColor(score)
+    // The eyebrow and the unit sit inside the arc, so past 1.3x they stop growing there. The
+    // tier label leaves the arc and takes its size from the reader's setting instead.
+    val large = fontScale > 1.3f
+    fun inside(size: Float) = (size * minOf(fontScale, 1.3f) / fontScale).sp
+
+    Column(
+        modifier = modifier.clearAndSetSemantics {
+            contentDescription = "Risk score $score out of 100. ${tier.label}."
+        },
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = size.minDimension * 0.075f
-            val inset = stroke / 2f + size.minDimension * 0.06f
-            val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
-            val topLeft = Offset(inset, inset)
-            val start = 150f
-            val total = 240f
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val radius = arcSize.width / 2f
-
-            // 1. Subtle ambient depth glow behind the dial
-            val ambientRadius = radius * 0.92f
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        tierColor.copy(alpha = 0.14f * sweep.value),
-                        tierColor.copy(alpha = 0.03f * sweep.value),
-                        Color.Transparent,
-                    ),
-                    center = center,
-                    radius = ambientRadius,
-                ),
-                radius = ambientRadius,
-                center = center,
-            )
-
-            // 2. Inner precision guideline
-            val innerRadius = radius - stroke * 0.85f
-            val innerInset = size.width / 2f - innerRadius
-            drawArc(
-                color = muted.copy(alpha = 0.12f),
-                startAngle = start,
-                sweepAngle = total,
-                useCenter = false,
-                topLeft = Offset(innerInset, innerInset),
-                size = Size(innerRadius * 2, innerRadius * 2),
-                style = Stroke(1.2f * density, cap = StrokeCap.Round),
-            )
-
-            // 3. Calibrated precision ticks around the arc (41 points, major ticks at legal thresholds 0, 30, 60, 100)
-            val tickOuter = radius + stroke * 1.35f
-            val tickInner = radius + stroke * 0.95f
-            for (i in 0..40) {
-                val a = Math.toRadians((start + total * i / 40f).toDouble())
-                val lit = i / 40f <= sweep.value
-                // Legal tier boundaries: 0 (start), 12 (score 30 Caution), 24 (score 60 Toxic), 40 (score 100)
-                val thresholdMarker = i == 0 || i == 12 || i == 24 || i == 40
-                val tickColor = when {
-                    thresholdMarker && lit -> tierColor
-                    lit -> tierColor.copy(alpha = 0.85f)
-                    thresholdMarker -> muted.copy(alpha = 0.50f)
-                    else -> muted.copy(alpha = 0.22f)
+        BoxWithConstraints(Modifier.widthIn(max = Dial.W).fillMaxWidth().aspectRatio(Dial.W / Dial.H)) {
+            val k = maxWidth / Dial.W
+            Canvas(Modifier.matchParentSize()) {
+                val scale = size.width / Dial.W.toPx()
+                fun px(d: Dp) = d.toPx() * scale
+                val c = Offset(px(Dial.CX), px(Dial.CY))
+                fun at(radius: Float, deg: Float): Offset {
+                    val a = Math.toRadians(deg.toDouble())
+                    return Offset(c.x + radius * cos(a).toFloat(), c.y + radius * sin(a).toFloat())
                 }
-                val extraReach = if (thresholdMarker) stroke * 0.40f else 0f
-                drawLine(
-                    color = tickColor,
-                    start = Offset(center.x + tickInner * cos(a).toFloat(), center.y + tickInner * sin(a).toFloat()),
-                    end = Offset(
-                        center.x + (tickOuter + extraReach) * cos(a).toFloat(),
-                        center.y + (tickOuter + extraReach) * sin(a).toFloat(),
-                    ),
-                    strokeWidth = if (thresholdMarker) 2.6f * density else 1.2f * density,
-                    cap = StrokeCap.Round,
-                )
+                val r = px(Dial.BAND_R)
+                val topLeft = Offset(c.x - r, c.y - r)
+                val arcSize = Size(2 * r, 2 * r)
+                val band = Stroke(width = px(Dial.BAND_W), cap = StrokeCap.Butt)
+
+                // 1. The scale: fixed, and never lit by the reading.
+                for (p in 0..100 step 2) {
+                    val major = p % 10 == 0
+                    val a = Dial.angle(p.toFloat())
+                    drawLine(
+                        color = hero.content.copy(alpha = if (major) 0.50f else 0.22f),
+                        start = at(px(Dial.TICK_OUT) - px(if (major) Dial.MAJOR_LEN else Dial.MINOR_LEN), a),
+                        end = at(px(Dial.TICK_OUT), a),
+                        strokeWidth = px(if (major) Dial.MAJOR_W else Dial.MINOR_W),
+                        cap = StrokeCap.Butt,
+                    )
+                }
+
+                // 2. The zone track, with a 2 dp break at each threshold, the way a tachometer
+                // marks its red zone. The thresholds are drawn, not labelled.
+                val half = Math.toDegrees((px(Dial.ZONE_GAP) / r).toDouble()).toFloat() / 2f
+                listOf(
+                    Triple(0f, 30f, hero.content.copy(alpha = 0.10f)),
+                    Triple(30f, 60f, HeroAmber.copy(alpha = 0.20f)),
+                    Triple(60f, 100f, Crimson.copy(alpha = 0.22f)),
+                ).forEach { (from, to, color) ->
+                    val a1 = Dial.angle(from) + if (from == 0f) 0f else half
+                    val a2 = Dial.angle(to) - if (to == 100f) 0f else half
+                    drawArc(color, a1, a2 - a1, useCenter = false, topLeft = topLeft, size = arcSize, style = band)
+                }
+
+                // 3. The value band: one colour, butt caps, so its length is the score.
+                val v = sweep.value * 100f
+                if (v > 0f) {
+                    drawArc(bandColor, Dial.START, Dial.SWEEP * v / 100f, useCenter = false, topLeft = topLeft, size = arcSize, style = band)
+                }
+
+                // 4. The index: a notch cut in the band, then the line itself.
+                val a = Dial.angle(v)
+                drawLine(hero.container, at(px(Dial.KNOCK_IN), a), at(px(Dial.KNOCK_OUT), a), px(Dial.KNOCK_W), StrokeCap.Butt)
+                drawLine(hero.content, at(px(Dial.INDEX_IN), a), at(px(Dial.INDEX_OUT), a), px(Dial.INDEX_W), StrokeCap.Butt)
             }
 
-            // 4. Background recessed track
-            drawArc(track, start, total, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-
-            // 5. Dynamic multi-stop gradient sweep fill
-            val brush = Brush.sweepGradient(
-                0.00f to colors.low,
-                0.28f to colors.low,
-                0.42f to colors.medium,
-                0.58f to colors.high,
-                1.00f to colors.high,
-                center = center,
+            Eyebrow(
+                "Risk score",
+                color = hero.muted,
+                style = HeroEyebrowStyle.copy(fontSize = inside(12f), lineHeight = inside(16f)),
+                modifier = Modifier.align(Alignment.TopCenter).offset(y = 52.dp * k),
             )
-            val filled = total * sweep.value
-            if (filled > 0.5f) {
-                rotate(start, center) {
-                    drawArc(brush, 0f, filled, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-                }
-                // 6. Multi-stage luminous indicator jewel at needle tip
-                val a = Math.toRadians((start + filled).toDouble())
-                val tip = Offset(center.x + radius * cos(a).toFloat(), center.y + radius * sin(a).toFloat())
-                // Diffuse ambient bloom
-                drawCircle(tierColor.copy(alpha = 0.28f), radius = stroke * 1.75f, center = tip)
-                // Intense mid halo
-                drawCircle(tierColor.copy(alpha = 0.70f), radius = stroke * 0.95f, center = tip)
-                // Crisp white central pip
-                drawCircle(Color.White, radius = stroke * 0.38f, center = tip)
-            }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Eyebrow("Risk score", color = muted)
-            Row(verticalAlignment = Alignment.Bottom) {
+            // The numeral is sized in dp, not sp: it is already 80 and must not grow through the
+            // arc. The dial's spoken description carries the same reading. The spec's row top is
+            // 68 dp in a CSS line box; with the line height equal to the font size, Compose puts
+            // the same digits 12.8 dp lower, so the row sits at 55.2 to draw them at box y 76
+            // to 136, where the spec does.
+            val numeral = with(density) { (80.dp * k).toSp() }
+            Row(Modifier.align(Alignment.TopCenter).offset(y = 55.2.dp * k)) {
                 Text(
-                    text = (sweep.value * 100).roundToInt().toString(),
-                    style = FigureStyle.copy(fontSize = 64.sp, lineHeight = 64.sp, letterSpacing = (-3).sp),
-                    color = content,
+                    text = shown.toString(),
+                    style = TextStyle(
+                        fontFamily = RedlineFonts.Sans,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFeatureSettings = "tnum",
+                        fontSize = numeral,
+                        lineHeight = numeral,
+                        letterSpacing = -with(density) { (3.dp * k).toSp() },
+                    ),
+                    color = hero.content,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.alignByBaseline(),
                 )
+                // No spacer: the spec's 4 dp draws 14 dp of ink between the digits and the unit
+                // here against the 10 dp it shows, because the numeral's box already ends past
+                // its last digit.
                 Text(
                     "/100",
-                    style = FigureStyle.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
-                    color = muted,
-                    modifier = Modifier.padding(bottom = 10.dp, start = 2.dp),
+                    style = TextStyle(
+                        fontFamily = RedlineFonts.Mono,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = inside(15f),
+                        lineHeight = inside(20f),
+                    ),
+                    color = hero.muted,
+                    modifier = Modifier.alignByBaseline(),
                 )
             }
-            Spacer(Modifier.height(Space.s))
-            TierChip(tier, tierColor)
+            if (!large) {
+                Text(
+                    tier.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = tierColor,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (186.dp - 10.dp) * k)
+                        .graphicsLayer { alpha = labelAlpha.value },
+                )
+            }
         }
-    }
-}
-
-@Composable
-internal fun TierChip(tier: Tier, color: Color, modifier: Modifier = Modifier) {
-    val animate = animationsEnabled()
-    val pulse = if (animate) {
-        val infinite = rememberInfiniteTransition(label = "tierPulse")
-        val alpha by infinite.animateFloat(
-            initialValue = 0.55f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1200, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "pulseAlpha",
-        )
-        alpha
-    } else 1f
-
-    Row(
-        modifier = modifier
-            .clip(CircleShape)
-            .background(color.copy(alpha = 0.14f))
-            .border(BorderStroke(1.dp, color.copy(alpha = 0.30f)), CircleShape)
-            .padding(horizontal = 12.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        Box(
-            Modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = pulse)),
-        )
-        Text(
-            text = tier.label,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-            color = color,
-        )
+        if (large) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                tier.label,
+                style = MaterialTheme.typography.labelLarge,
+                color = tierColor,
+                modifier = Modifier.graphicsLayer { alpha = labelAlpha.value },
+            )
+        }
     }
 }
 

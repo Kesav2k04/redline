@@ -83,6 +83,12 @@ private val AmberTintDark = Color(0xFF372511)
 private val GreenDark = Color(0xFF4CD4A0)
 private val GreenTintDark = Color(0xFF0F2E24)
 
+// The report card's own palette. It is the same in both themes because the card is always dark.
+internal val Obsidian = Color(0xFF111318)
+internal val HeroPaper = Color(0xFFF2F3F5)
+internal val Crimson = Color(0xFFFF4D4D)
+internal val HeroAmber = AmberDark
+
 // Every role is set. Any role left out falls back to Material's baseline palette, which
 // is violet, and that is how the first bottom sheet this app showed came up lilac.
 private val Light = lightColorScheme(
@@ -164,10 +170,28 @@ private val Dark = darkColorScheme(
  * In dark mode it lifts a step off the page instead of sinking into it.
  */
 @Immutable
-data class Hero(val container: Color, val content: Color, val muted: Color, val accent: Color)
+data class Hero(
+    val container: Color,
+    val content: Color,
+    val muted: Color,
+    val accent: Color,
+    /** Set where the card would vanish into the page: Obsidian on the dark page is 1.07:1. */
+    val border: Color? = null,
+)
 
-private val HeroLight = Hero(Color(0xFF0E0F13), Paper, Color(0xFFA9AEB9), RedDark)
-private val HeroDark = Hero(Color(0xFF17191F), Paper, PaperMuted, RedDark)
+private val HeroLight = Hero(Obsidian, HeroPaper, PaperMuted, Crimson)
+private val HeroDark = Hero(Obsidian, HeroPaper, PaperMuted, Crimson, border = HeroPaper.copy(alpha = 0.08f))
+
+/**
+ * The dial's band and tier label for a score: paper, amber, crimson. Lightness falls as risk
+ * rises, so the order holds under any colour deficiency. Green is not on this ramp, because
+ * green says clean and the report never claims that. Thresholds match [RiskColors.ofScore].
+ */
+internal fun dialColor(score: Int): Color = when {
+    score < 30 -> HeroPaper
+    score < 60 -> HeroAmber
+    else -> Crimson
+}
 
 val LocalHero = staticCompositionLocalOf { HeroLight }
 

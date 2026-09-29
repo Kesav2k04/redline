@@ -20,6 +20,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.LineBreak
 import androidx.core.content.FileProvider
 import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
@@ -95,6 +96,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.derivedStateOf
@@ -1100,114 +1102,105 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
     }
 
     val moving = animationsEnabled()
+    // The dial holds at zero until the Scan button has finished becoming this panel, so the
+    // needle travels across a panel that is standing still. Behind it the severity bar fills and
+    // the blocks under the dial rise in, one after another. Nothing else on the card moves.
+    var open by remember(state) { mutableStateOf(!moving || flagged == 0) }
     val shown = remember(state) { Animatable(if (moving) 0f else flagged.toFloat()) }
-    val legend = remember(state) { Animatable(if (moving) 0f else 1f) }
+    val blocks = remember(state) { List(5) { Animatable(if (moving) 0f else 1f) } }
     val visibility = LocalVisibilityScope.current
     LaunchedEffect(state) {
         if (!moving || flagged == 0) {
             shown.snapTo(flagged.toFloat())
-            legend.snapTo(1f)
+            blocks.forEach { it.snapTo(1f) }
+            open = true
             return@LaunchedEffect
         }
-        // The count starts when the Scan button has finished becoming this panel, so the
-        // number climbs in place rather than inside a moving box.
         visibility?.let { v ->
             withTimeoutOrNull(900) { snapshotFlow { v.transition.isRunning }.first { !it } }
         }
-        shown.animateTo(
-            flagged.toFloat(),
-            tween(durationMillis = (520 + 30 * flagged).coerceAtMost(900), easing = RedlineMotion.Decelerate),
-        )
-        legend.animateTo(1f, tween(150))
+        open = true
+        coroutineScope {
+            launch {
+                delay(400)
+                shown.animateTo(flagged.toFloat(), tween(durationMillis = 600, easing = RedlineMotion.Decelerate))
+            }
+            blocks.forEachIndexed { i, block ->
+                launch {
+                    delay(360L + i * RedlineMotion.STAGGER_MS)
+                    block.animateTo(1f, tween(durationMillis = 240, easing = RedlineMotion.Decelerate))
+                }
+            }
+        }
+    }
+    val lift = with(LocalDensity.current) { 8.dp.toPx() }
+    fun Modifier.rise(block: Animatable<Float, *>) = graphicsLayer {
+        alpha = block.value
+        translationY = (1f - block.value) * lift
     }
 
-    val glow = risk.ofScore(insight.score)
     Surface(
         color = hero.container,
         contentColor = hero.content,
         shape = MaterialTheme.shapes.extraLarge,
+        border = hero.border?.let { BorderStroke(1.dp, it) },
         modifier = Modifier.verdict().fillMaxWidth(),
     ) {
+        // One axis: everything is either centred on the card's centre line or spans the column.
         Column(
-            modifier = Modifier
-                // A soft glow in the tier's colour behind the dial, so the panel reads as lit
-                // from the score rather than as a black box with a chart in it.
-                .drawBehind {
-                    if (flagged > 0 && state.looksLikeLease) {
-                        val c = Offset(size.width / 2f, size.width * 0.36f)
-                        drawCircle(
-                            brush = Brush.radialGradient(listOf(glow.copy(alpha = 0.22f), Color.Transparent), center = c, radius = size.width * 0.6f),
-                            radius = size.width * 0.6f,
-                            center = c,
-                        )
-                    }
-                }
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (flagged == 0 || !state.looksLikeLease) {
                 Text(
                     text = heading,
                     style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.semantics { heading() },
                 )
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = when {
                         flagged == 0 -> "No rule matched this text. That is not the same as a clean lease."
                         flagged == 1 -> "One match below, shown free. Read on for why."
                         else -> "$flagged matches below, shown free. Read on for why."
                     },
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = hero.muted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 300.dp),
                 )
             } else {
-                RiskGauge(
-                    score = insight.score,
-                    tier = insight.tier,
+                RiskGauge(score = insight.score, tier = insight.tier, start = open)
+
+                Spacer(Modifier.height(24.dp))
+                // The count is in Paper, not crimson: two of the eleven are only worth checking,
+                // and the bar under it says so. It no longer counts up, because the score is the
+                // one number that should move.
+                Text(
+                    text = "$flagged of ${state.clauseCount} clauses\ncould cost you money",
+                    style = MaterialTheme.typography.headlineSmall.copy(lineBreak = LineBreak.Heading),
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .widthIn(max = 260.dp)
-                        .fillMaxWidth(0.78f),
+                        .rise(blocks[0])
+                        .clearAndSetSemantics { contentDescription = heading; heading() },
                 )
 
-                Column(Modifier.clearAndSetSemantics { contentDescription = heading; heading() }) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        // Reserved at the final number's width, so " of 16 clauses" holds
-                        // still while the digits run instead of sliding as they change.
-                        val countStyle = FigureStyle.copy(fontSize = 40.sp, lineHeight = 40.sp)
-                        val measurer = rememberTextMeasurer()
-                        val finalWidth = with(LocalDensity.current) {
-                            measurer.measure(flagged.toString(), countStyle).size.width.toDp()
-                        }
-                        Box(Modifier.width(finalWidth), contentAlignment = Alignment.BottomStart) {
-                            Text(
-                                text = shown.value.toInt().toString(),
-                                style = countStyle,
-                                color = hero.accent,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
-                        }
-                        Text(
-                            text = " of ${state.clauseCount} clauses",
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                    }
-                    Text("could cost you money", style = MaterialTheme.typography.titleLarge)
-                }
-
+                Spacer(Modifier.height(20.dp))
                 SeverityBar(
                     serious = state.highClauses,
                     other = flagged - state.highClauses,
                     clear = (state.clauseCount - flagged).coerceAtLeast(0),
                     spoken = severitySplit(state.highClauses, flagged),
                     filled = { if (flagged == 0) 1f else shown.value / flagged },
-                    legendAlpha = { legend.value },
+                    modifier = Modifier.rise(blocks[1]),
                 )
 
-                insight.exposure?.takeIf { it.oneOff.isNotEmpty() }?.let { exposure ->
-                    ExposureLine(exposure, rent, alpha = { legend.value })
+                val exposure = insight.exposure?.takeIf { it.oneOff.isNotEmpty() }
+                Spacer(Modifier.height(24.dp))
+                if (exposure != null) {
+                    ExposureLine(exposure, rent, Modifier.rise(blocks[2]))
+                    Spacer(Modifier.height(20.dp))
                 }
 
                 // The split is already in the legend, so this line says what happens
@@ -1221,23 +1214,28 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = hero.muted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.rise(blocks[3]).widthIn(max = 300.dp),
                 )
 
                 // Free, locked or not. It carries the count and nothing from the lease,
                 // so there is nothing in it to sell and no reason to hold it back.
                 if (ShareCardText.offered(state)) {
+                    Spacer(Modifier.height(16.dp))
                     Surface(
                         onClick = onShareCount,
-                        shape = MaterialTheme.shapes.small,
-                        color = hero.content.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(8.dp),
+                        color = hero.content.copy(alpha = 0.08f),
                         contentColor = hero.content,
+                        modifier = Modifier.fillMaxWidth().height(48.dp).rise(blocks[4]),
                     ) {
                         Row(
-                            modifier = Modifier.heightIn(min = 44.dp).padding(horizontal = 14.dp),
+                            modifier = Modifier.fillMaxSize(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.Center,
                         ) {
-                            Icon(RedlineIcons.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(RedlineIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
                             Text("Share the score, not the lease", style = MaterialTheme.typography.labelLarge)
                         }
                     }
@@ -1248,41 +1246,50 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
 }
 
 /**
- * The money the flagged clauses put in writing, as one figure on the dark panel. Every rupee
- * or dollar in it is a number printed in the lease itself; the breakdown card below says which.
+ * The money the flagged clauses put in writing, as one figure between two hairlines on the dark
+ * panel. Every rupee or dollar in it is a number printed in the lease itself; the breakdown
+ * card below says which.
  */
 @Composable
-private fun ExposureLine(exposure: dev.kesav.redline.Exposure, rent: Long?, alpha: () -> Float) {
+private fun ExposureLine(exposure: dev.kesav.redline.Exposure, rent: Long?, modifier: Modifier = Modifier) {
     val hero = LocalHero.current
     val total = exposure.total(exposure.rent ?: rent)
     val figure = total?.let { money(exposure.symbol, it) } ?: monthsText(exposure.months)
     val spoken = "$figure" + (if (total == null) " of rent" else "") + " written into the flagged clauses"
     val count = if (exposure.oneOff.size == 1) "in 1 clause" else "in ${exposure.oneOff.size} clauses"
+    val label = if (total == null) "Rent at stake" else "Money at stake"
+    val figureStyle = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum")
+    val countStyle = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp)
+    val rule = hero.content.copy(alpha = 0.10f)
     // At large font sizes the count beside the figure squeezed "Rent at stake" into two
-    // broken lines, so there it moves under the figure and the column gets the full width.
+    // broken lines, so there it becomes one centred column and gets the full width.
     val stacked = LocalDensity.current.fontScale > 1.3f
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer { this.alpha = alpha() }
-            .clip(MaterialTheme.shapes.medium)
-            .background(hero.content.copy(alpha = 0.07f))
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-            .clearAndSetSemantics { contentDescription = spoken },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        IconBadge(RedlineIcons.Wallet, tint = hero.accent, container = hero.accent.copy(alpha = 0.16f), size = 40.dp)
-        Column(Modifier.weight(1f)) {
-            Eyebrow(if (total == null) "Rent at stake" else "Money at stake", color = hero.muted)
-            Text(
-                figure,
-                style = FigureStyle.copy(fontSize = 26.sp, lineHeight = 30.sp),
-                color = hero.content,
-            )
-            if (stacked) Text(count, style = MaterialTheme.typography.labelMedium, color = hero.muted)
+    Column(modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = spoken }) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(rule))
+        if (stacked) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Eyebrow(label, color = hero.muted, style = HeroEyebrowStyle)
+                Text(figure, style = figureStyle, color = hero.content, textAlign = TextAlign.Center)
+                Text(count, style = countStyle, color = hero.muted)
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Eyebrow(label, color = hero.muted, style = HeroEyebrowStyle)
+                    Text(count, style = countStyle, color = hero.muted)
+                }
+                Text(figure, style = figureStyle, color = hero.content)
+            }
         }
-        if (!stacked) Text(count, style = MaterialTheme.typography.labelMedium, color = hero.muted)
+        Box(Modifier.fillMaxWidth().height(1.dp).background(rule))
     }
 }
 
@@ -1294,53 +1301,77 @@ private fun SeverityBar(
     other: Int,
     clear: Int,
     spoken: String,
+    modifier: Modifier = Modifier,
     filled: () -> Float = { 1f },
-    legendAlpha: () -> Float = { 1f },
 ) {
     val hero = LocalHero.current
-    val amber = MaterialTheme.colorScheme.tertiary
     val total = (serious + other + clear).coerceAtLeast(1)
+    val seriousColor = hero.accent
+    val otherColor = HeroAmber
+    // Clear is Paper at 36%, the lowest that still reads as a segment against the card.
+    val clearColor = hero.content.copy(alpha = 0.36f)
+    val stacked = LocalDensity.current.fontScale > 1.3f
+    val legend: @Composable () -> Unit = {
+        Legend(seriousColor, serious, "serious")
+        if (other > 0) Legend(otherColor, other, "worth checking")
+        Legend(clearColor, clear, "clear")
+    }
     // Read aloud as one sentence rather than as three coloured boxes and three labels.
     Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = spoken },
     ) {
         Row(
-            // Fills left to right in step with the count above it.
+            // Fills left to right in step with the card settling.
             modifier = Modifier
                 .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(5.dp))
+                .height(6.dp)
                 .drawWithContent {
                     clipRect(right = size.width * filled().coerceIn(0f, 1f)) {
                         this@drawWithContent.drawContent()
                     }
                 },
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            if (serious > 0) Box(Modifier.weight(serious.toFloat() / total).fillMaxHeight().background(hero.accent))
-            if (other > 0) Box(Modifier.weight(other.toFloat() / total).fillMaxHeight().background(amber))
-            if (clear > 0) Box(Modifier.weight(clear.toFloat() / total).fillMaxHeight().background(hero.content.copy(alpha = 0.18f)))
+            if (serious > 0) Box(Modifier.weight(serious.toFloat() / total).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(seriousColor))
+            if (other > 0) Box(Modifier.weight(other.toFloat() / total).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(otherColor))
+            if (clear > 0) Box(Modifier.weight(clear.toFloat() / total).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(clearColor))
         }
-        // Wraps rather than squeezes: at the largest font size a Row stood "5 clear" on
-        // end, one letter per line.
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.graphicsLayer { alpha = legendAlpha() },
-        ) {
-            Legend(hero.accent, "$serious serious")
-            if (other > 0) Legend(amber, "$other worth checking")
-            Legend(hero.content.copy(alpha = 0.35f), "$clear clear")
+        // The key spans the bar, first item at its left end and last at its right end. It wraps
+        // rather than squeezes, and past 1.3x it becomes a centred column: at the largest font
+        // size a Row stood "5 clear" on end, one letter per line.
+        if (stacked) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) { legend() }
+        } else {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) { legend() }
         }
     }
 }
 
+/** A swatch the shape of the bar segment it keys, then the count in Paper and its word in muted. */
 @Composable
-private fun Legend(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(Modifier.size(8.dp).background(color, RoundedCornerShape(2.dp)))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = LocalHero.current.muted)
+private fun Legend(color: Color, figure: Int, word: String) {
+    val hero = LocalHero.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(12.dp, 6.dp).background(color, RoundedCornerShape(1.dp)))
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(color = hero.content, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")) {
+                    append(figure.toString())
+                }
+                append(" ")
+                withStyle(SpanStyle(color = hero.muted, fontWeight = FontWeight.Medium)) { append(word) }
+            },
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp),
+        )
     }
 }
 

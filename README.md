@@ -126,7 +126,7 @@ cd redline
 ./gradlew :app:testDebugUnitTest
 ```
 
-173 unit tests in 30 suites: 172 pass, 1 is skipped and none fail. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+177 unit tests in 31 suites: 176 pass, 1 is skipped and none fail. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
 To regenerate the screenshots in this README with the Roborazzi tests:
 
