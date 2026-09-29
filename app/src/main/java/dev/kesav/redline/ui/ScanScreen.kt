@@ -184,6 +184,17 @@ fun ScanScreen(
     var reading by rememberSaveable { mutableStateOf<Int?>(null) }
     var comparing by rememberSaveable { mutableStateOf(false) }
 
+    // These three outlive the process and the scan does not, so after the process is killed
+    // (most often behind the store's purchase sheet) the reader is back in the editor with them
+    // still set, and the next Scan would pop an old paywall or the comparison open unasked.
+    LaunchedEffect(ui.state is ScanState.Editing) {
+        if (ui.state is ScanState.Editing) {
+            paywall = null
+            reading = null
+            comparing = false
+        }
+    }
+
     // A purchase that lands closes the paywall behind it: the report opening underneath is the
     // receipt. The comparison needs Pro, so a pass bought from that tap leaves it open.
     LaunchedEffect(ui.unlocked, ui.pro) {
@@ -449,7 +460,8 @@ fun ScanScreen(
             )
         }
     }
-    if (comparing && compared != null) {
+    // Pro is checked here as well as on the tap: a monthly plan can lapse while this is open.
+    if (comparing && compared != null && ui.pro) {
         CompareScreen(
             current = compared,
             currentId = remember(ui.text) { dev.kesav.redline.leaseFingerprint(ui.text) },
