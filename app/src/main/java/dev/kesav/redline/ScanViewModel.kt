@@ -454,9 +454,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 ?: offers.firstOrNull { it.plan == Plan.PRO_LIFETIME }
                 ?: offers.firstOrNull()
             if (chosen == null) {
-                _ui.update {
-                    it.copy(busy = false, message = "The store could not be reached. Check the connection and try again.")
-                }
+                _ui.update { it.copy(busy = false, storeMessage = Billing.STORE_UNREACHABLE) }
                 return@launch
             }
             // The lease is fingerprinted before the purchase sheet goes up, so a pass opens
@@ -476,7 +474,13 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                     _ui.update { it.copy(busy = false, storeMessage = note).withAccess() }
                 }
                 Billing.Outcome.Cancelled -> _ui.update { it.copy(busy = false) }
-                is Billing.Outcome.Failed -> _ui.update { it.copy(busy = false, message = outcome.message) }
+                // Bought on another phone, which is another purchase ID here, so Play refuses to
+                // sell it again. A restore brings it across instead of a dead end.
+                Billing.Outcome.Owned -> {
+                    val problem = Billing.restore()
+                    _ui.update { it.copy(busy = false, storeMessage = problem?.let { Billing.ALREADY_OWNED }).withAccess() }
+                }
+                is Billing.Outcome.Failed -> _ui.update { it.copy(busy = false, storeMessage = outcome.message) }
             }
         }
     }
@@ -516,7 +520,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         viewModelScope.launch {
             _ui.update { it.copy(busy = true, message = null, storeMessage = null) }
             val error = Billing.restore()
-            _ui.update { it.copy(busy = false, message = error) }
+            _ui.update { it.copy(busy = false, storeMessage = error) }
         }
     }
 
