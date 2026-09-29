@@ -19,7 +19,7 @@ import org.robolectric.annotation.Config
 
 /**
  * A clone built without a store key never gets offers. The paywall has to say that once and
- * stop, not spin on "Reaching the store" for a judge who will never see prices arrive.
+ * stop, not spin on "Reaching the store" for someone who will never see prices arrive.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35], application = Application::class)

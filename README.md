@@ -4,11 +4,9 @@
 
 # Redline
 
-**Reads a rental lease on your phone and marks, in red, every clause that could cost you money.**
+**Reads a rental lease on your phone and marks, in red, the clauses that could cost you money.**
 
-A lease arrives with twenty minutes to sign it. The clauses that take your money are the quiet ones: a deposit of ten months' rent, a refund that waits ninety days, repairs deducted "in the landlord's sole discretion". Redline finds each one, works out what it costs you and, where a local law caps it, cites the statute. The lease text never leaves the phone. No account, no login, no upload.
-
-**Next Gen Award entry, RevenueCat Shipaton 2026.** Built by a student. Open-source Android app, demo video and this repository, with no store listing, as the Next Gen rules allow.
+A lease arrives with twenty minutes to sign it. The clauses that take your money are the quiet ones: a deposit of ten months' rent, a refund that waits ninety days, repairs deducted "in the landlord's sole discretion". Redline looks for them, works out what each one costs you and, where a local law caps it, cites the statute. The lease text never leaves the phone. No account, no login, no upload.
 
 **Try it in one minute:** install `app-release.apk` from the [v1.0.0 release](https://github.com/Kesav2k04/redline/releases/tag/v1.0.0), tap **No lease to hand? Open a sample lease**, and turn on airplane mode first if you like. The scan runs entirely on the phone.
 
