@@ -323,6 +323,17 @@ fun ScanScreen(
         )
         if (result == SnackbarResult.ActionPerformed) viewModel.undoForget()
     }
+    // The same Undo for the lease text, when Start over or Back clears it. It goes as soon as
+    // the field has something new in it, so Undo never writes over a lease just pasted.
+    LaunchedEffect(ui.cleared, ui.text.isEmpty()) {
+        if (ui.cleared == null || ui.text.isNotEmpty()) return@LaunchedEffect
+        val result = snackbar.showSnackbar(
+            message = "Cleared the lease text",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Indefinite,
+        )
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoClear()
+    }
 
     // No app bar. Each state draws its own header: the first screen leads with what
     // the app promises, and "Redline" in a bar above it only repeated the launcher label.
@@ -373,6 +384,7 @@ fun ScanScreen(
                 reading = ui.reading,
                 readingProgress = ui.readingProgress,
                 onCancelReading = viewModel::cancelImport,
+                onClear = { viewModel.clear(undoHold) },
                 source = ui.source,
                 photoPages = ui.photoPages,
                 onOpen = { openFile.launch(arrayOf("application/pdf", "image/*", "text/plain")) },

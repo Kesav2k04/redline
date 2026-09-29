@@ -120,6 +120,7 @@ internal fun Editor(
     onForget: (String) -> Unit = {},
     backEnabled: Boolean = true,
     onCancelReading: () -> Unit = {},
+    onClear: () -> Unit = { onText("") },
 ) {
     // Set by the paste tile when the clipboard is empty, so there is a field to type or
     // paste into. Saved, so rotating the phone does not throw the reader back a step.
@@ -139,7 +140,7 @@ internal fun Editor(
             // the caller turns this off while the camera is open or it would take the press.
             BackHandler(enabled = backEnabled) {
                 composing = false
-                onText("")
+                onClear()
             }
             Document(
                 text = text,
@@ -151,7 +152,7 @@ internal fun Editor(
                 onPhoto = onPhoto,
                 onStartOver = {
                     composing = false
-                    onText("")
+                    onClear()
                 },
                 focusOnOpen = composing && text.isEmpty(),
                 modifier = modifier,

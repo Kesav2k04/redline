@@ -107,6 +107,9 @@ sealed interface ScanState {
 /** How long a forgotten lease can be brought back, before any accessibility allowance. */
 internal const val UNDO_HOLD_MILLIS = 5_000L
 
+/** The field as it was just before Start over or Back cleared it, held for Undo. */
+data class ClearedText(val text: String, val source: String?, val photoPages: Int, val rent: Long?)
+
 data class ScanUi(
     val text: String = "",
     val state: ScanState = ScanState.Editing,
@@ -124,6 +127,8 @@ data class ScanUi(
     val saved: List<SavedLease> = emptyList(),
     /** A lease just forgotten, held so one tap can put it back, or null once the hold ends. */
     val forgotten: SavedLease? = null,
+    /** Lease text just cleared by Start over or Back, held the same way, or null. */
+    val cleared: ClearedText? = null,
     /** False until the first entitlement read lands. Distinct from `unlocked == false`. */
     val entitlementsKnown: Boolean = false,
     /** True while the last entitlement read failed, so the screen knows to ask again. */
@@ -445,6 +450,46 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
     }
 
     private var forgetHold: Job? = null
+
+    /**
+     * Empties the field, as Start over and Back do, and holds what was there for [holdMillis] so
+     * one tap can put it back. A lease that took a long read, or was pasted in, is real work.
+     */
+    fun clear(holdMillis: Long = UNDO_HOLD_MILLIS) {
+        val now = _ui.value
+        clearHold?.cancel()
+        val held = now.text.takeIf { it.isNotBlank() }?.let { ClearedText(it, now.source, now.photoPages, now.rent) }
+        edit("")
+        _ui.update { it.copy(cleared = held) }
+        if (held != null) {
+            clearHold = viewModelScope.launch {
+                delay(holdMillis)
+                _ui.update { it.copy(cleared = null) }
+            }
+        }
+    }
+
+    /** Puts back the text [clear] is holding, unless something new has gone into the field since. */
+    fun undoClear() {
+        val held = _ui.value.cleared ?: return
+        clearHold?.cancel()
+        _ui.update {
+            if (it.text.isNotEmpty()) {
+                it.copy(cleared = null)
+            } else {
+                it.copy(
+                    text = held.text,
+                    source = held.source,
+                    photoPages = held.photoPages,
+                    rent = held.rent,
+                    state = ScanState.Editing,
+                    cleared = null,
+                )
+            }
+        }
+    }
+
+    private var clearHold: Job? = null
 
     // Saving, forgetting and restoring each read the whole file and write it back, so two at
     // once would lose one of them.
