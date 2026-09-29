@@ -178,7 +178,7 @@ internal object Money {
 
     private val symbolAmount = Regex("""(₹|rs\.?|inr|\$|usd|£|gbp)\s?(\d[\d,]*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
     private val amountWord = Regex("""(\d[\d,]*(?:\.\d+)?|(?:[a-z]+[ -]){0,3}[a-z]+)\s+(rupees|dollars|pounds)""", RegexOption.IGNORE_CASE)
-    private val monthsOfRent = Regex("""(\d+|[a-z]+(?:[ -][a-z]+)?)\s+(?:calendar\s+)?months?'?s?\s+(?:of\s+(?:the\s+)?(?:monthly\s+)?)?rent""", RegexOption.IGNORE_CASE)
+    private val monthsOfRent = Regex("""(?<![\d.])(\d+(?:\.\d+)?|[a-z]+(?:[ -][a-z]+)?)\s+(?:calendar\s+)?months?'?s?\s+(?:of\s+(?:the\s+)?(?:monthly\s+)?)?rent""", RegexOption.IGNORE_CASE)
     private val percentOfRent = Regex("""(\d+(?:\.\d+)?|[a-z]+(?:[ -][a-z]+)?)\s*(?:percent|per cent|%)\s+(?:of\s+(?:the\s+)?(?:monthly\s+)?rent)?""", RegexOption.IGNORE_CASE)
     private val rentStated = Regex(
         """(?:monthly rent|rent)\D{0,40}?((?:₹|rs\.?|inr|\$|usd|£|gbp)\s?\d[\d,]*(?:\.\d+)?)\s*(?:per month|a month|each month|every month|monthly|per mensem|/\s?month)""",

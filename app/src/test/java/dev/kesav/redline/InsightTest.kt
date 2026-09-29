@@ -82,6 +82,18 @@ class InsightTest {
     }
 
     @Test
+    fun aDecimalMonthCountIsReadWhole() {
+        // "1.5 months' rent" used to be read from the 5 after the point: $10,000 at stake, not $3,000.
+        val clauses = listOf(
+            Clause(0, "The monthly rent is \$2,000 per month."),
+            Clause(1, "The Tenant shall pay a security deposit equal to 1.5 months' rent, which shall be refunded within ninety days of the Tenant vacating the premises."),
+        )
+        val exposure = Insights.of(Scanner.ranked(clauses), clauses.size, null, clauses).exposure!!
+        assertEquals(1.5, exposure.months, 0.001)
+        assertEquals(3_000L, exposure.total())
+    }
+
+    @Test
     fun englandVoidsTheSection21Wording() {
         val clause = Clause(0, "The Landlord may serve notice under section 21 of the Housing Act 1988 to end the tenancy.")
         val findings = Scanner.ranked(listOf(clause), Place.ENGLAND)
