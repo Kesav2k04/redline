@@ -60,7 +60,7 @@ private class Pattern(
     /**
      * What the words straight after the quantity's unit must match for the quantity to
      * count. "12% per annum" is an interest rate, and the late-fee rule must not read it
-     * as a late fee.
+     * as a late fee. "A 12-month lease" is the term, not a deposit of twelve months.
      */
     val after: Regex? = null,
     val headline: (String?) -> String,
@@ -196,6 +196,8 @@ private val patterns = listOf(
         id = "deposit-size", topic = "Your deposit", severity = Severity.HIGH,
         all = listOf(Regex("\\b(?:deposit)")),
         unit = MONTHS, atLeast = 4, near = Regex("\\bdeposit"),
+        // Months of rent, the shape Money prices. "This 12-month lease" is the term.
+        after = Regex("'?s?\\s+(?:of\\s+(?:the\\s+)?(?:monthly\\s+)?)?rent"),
         headline = { "Deposit equal to $it months rent" },
         reason = "India's Model Tenancy Act proposes two months for a home, England caps most " +
             "deposits at five weeks' rent, and New York, Massachusetts and, for most landlords, " +
