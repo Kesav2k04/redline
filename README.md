@@ -10,6 +10,10 @@ A lease arrives with twenty minutes to sign it. The clauses that take your money
 
 **Try it in one minute:** install `app-release.apk` from the [v1.0.0 release](https://github.com/Kesav2k04/redline/releases/tag/v1.0.0), tap **No lease to hand? Open a sample lease**, and turn on airplane mode first if you like. The scan runs entirely on the phone.
 
+<img src="docs/install-qr.png" width="180" alt="QR code that downloads the Redline APK">
+
+Scan it with the phone camera, or [download the APK](https://github.com/Kesav2k04/redline/releases/latest/download/app-release.apk) (41 MB, Android 8.0 or newer). Android asks once to allow installs from the browser, as it does for any app from outside Google Play. Purchases go through RevenueCat's Test Store, so nothing is charged.
+
 <p align="center">
   <img src="docs/start.png" alt="Start screen: a lease card drawn in 3D that tilts under a finger, three ways to bring a lease in, and the sample lease" width="31%" />
   <img src="docs/report.png" alt="Report: the 0 to 100 risk gauge, the money the lease states, and clauses with no effect under local law" width="31%" />
