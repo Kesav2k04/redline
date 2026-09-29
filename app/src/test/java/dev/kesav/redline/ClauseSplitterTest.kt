@@ -54,6 +54,21 @@ class ClauseSplitterTest {
     }
 
     @Test
+    fun `an amount ending in slash dash does not swallow the next clause`() {
+        // Indian leases close an amount with "/-". Read as a word broken by the wrap, it
+        // glued the next numbered clause on: "Rs. 25,000/4. Deposit ...".
+        val text = """
+            3. Rent. The monthly rent is Rs. 25,000/-
+            4. Deposit. The security deposit is Rs. 1,00,000/-
+            5. Notice. Either party may end this agreement on one month's notice.
+        """.trimIndent()
+
+        val clauses = ClauseSplitter.split(text)
+        assertEquals(3, clauses.size)
+        assertEquals("3. Rent. The monthly rent is Rs. 25,000/-", clauses[0].text)
+    }
+
+    @Test
     fun `fragments shorter than twenty characters are dropped`() {
         val text = """
             SCHEDULE A
