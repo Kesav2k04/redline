@@ -542,14 +542,14 @@ private fun Promise() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Assurances() {
-    // Wraps as whole marks, so large text moves "Offline" to its own line instead of
-    // breaking it after the N.
+    // Wraps as whole marks, so large text moves "Works offline" to its own line instead of
+    // breaking it after the N. "Works", because "Offline" alone read as the phone's status.
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(Space.m),
         verticalArrangement = Arrangement.spacedBy(Space.xs),
     ) {
         Assurance(RedlineIcons.ShieldCheck, "On this phone")
-        Assurance(RedlineIcons.Offline, "Offline")
+        Assurance(RedlineIcons.Offline, "Works offline")
     }
 }
 
