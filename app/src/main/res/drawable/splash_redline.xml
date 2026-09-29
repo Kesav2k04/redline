@@ -1,22 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The v2 launcher mark with its red line drawn in by the pen, so a cold start opens with the
-     same gesture as the underline on the first screen. The page is the launcher foreground
-     unchanged. The launcher draws the red line as a filled bar with round ends; here it is the
-     same bar as a 6.5 wide round-capped stroke along its centre line (x 43.25 to 75.76, y 58.25),
-     because only a stroke can be trimmed. Android 12 and later only. -->
+<!-- The v3 launcher mark with its red leg drawn in by the pen: the letter is there at once, and
+     the leg and underline appear left to right, as a pen would add them. The leg is a filled
+     shape (its width changes), so it is revealed by a clip that widens rather than trimmed as a
+     stroke. The drawing is the launcher foreground unchanged. Android 12 and later only. -->
 <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt">
     <aapt:attr name="android:drawable">
         <vector android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-            <path android:fillColor="#F2F3F5" android:fillType="evenOdd"
-                android:pathData="M38.8,27.64H63.2C67.34,27.64 68.86,29.15 68.86,33.3V52.35H43.25A5.9,5.9 0 0 0 43.25,64.15H68.86V74.2C68.86,78.35 67.34,79.86 63.2,79.86H38.8C34.66,79.86 33.14,78.35 33.14,74.2V33.3C33.14,29.15 34.66,27.64 38.8,27.64ZM42.25,34.34H59.75A2.4,2.4 0 0 1 59.75,39.14H42.25A2.4,2.4 0 0 1 42.25,34.34ZM42.25,43.35H59.75A2.4,2.4 0 0 1 59.75,48.15H42.25A2.4,2.4 0 0 1 42.25,43.35ZM42.25,68.36H50.75A2.4,2.4 0 0 1 50.75,73.16H42.25A2.4,2.4 0 0 1 42.25,68.36Z"/>
-            <path android:name="redline" android:strokeColor="#FF4D4D" android:strokeWidth="6.5" android:strokeLineCap="round" android:trimPathEnd="0"
-                android:pathData="M43.25,58.25H75.76"/>
+            <path android:fillColor="#F4F1EA"
+                android:pathData="M39.07 68.38H49.06V66.85C48.98 64.28 48.96 60.99 48.91 57.65V51.89H49.06C51.81 51.75 55.85 51.45 58.53 50.25C62.55 48.42 64.56 45.4 64.56 42.16C64.56 36.52 60.41 33.33 52.24 33.33H39.07V34.39L42.93 34.86C43.08 39.01 43.09 44.7 43.09 49.56V51.84C43.09 56.71 43.02 62.73 42.88 66.85L39.07 67.38ZM48.91 50.67V49.56C48.91 44.63 48.93 38.82 49.06 34.71H52.03C56.61 34.71 58.79 37.47 58.79 42.48C58.79 46.81 56.84 50.67 51.66 50.67Z"/>
+            <group android:name="pen">
+                <clip-path android:name="reveal" android:pathData="M53.10,51.29H69.61V72.37H53.10Z"/>
+                <path android:fillColor="#FF4D4D"
+                    android:pathData="M55.89 51.79C55.17 51.94 54.39 52.04 53.6 52.13L54.85 54.29C55.33 55.09 55.81 56.1 56.31 57.33L58.3 62.46L58.38 62.67L61.01 69.44C61.51 70.72 62.7 71.87 63.54 71.87H79.62V70.29H69.61C68.77 70.29 67.54 69.15 67.13 68.17L64.81 62.67L64.72 62.46L62.86 58.07C61.31 54.56 59.62 52.67 55.89 51.79Z"/>
+            </group>
         </vector>
     </aapt:attr>
-    <target android:name="redline">
+    <target android:name="reveal">
         <aapt:attr name="android:animation">
-            <objectAnimator android:propertyName="trimPathEnd" android:valueFrom="0" android:valueTo="1"
+            <objectAnimator android:propertyName="pathData" android:valueType="pathType"
+                android:valueFrom="M53.10,51.29H69.61V72.37H53.10Z"
+                android:valueTo="M53.10,51.29H80.12V72.37H53.10Z"
                 android:startOffset="80" android:duration="420"
                 android:interpolator="@android:interpolator/fast_out_slow_in"/>
         </aapt:attr>

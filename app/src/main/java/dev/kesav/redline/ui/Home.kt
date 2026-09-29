@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -67,6 +68,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -81,6 +83,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.kesav.redline.PriceLead
+import dev.kesav.redline.R
 import dev.kesav.redline.SavedLease
 import dev.kesav.redline.Scanner
 import kotlin.math.roundToInt
@@ -489,16 +492,12 @@ private fun Promise() {
     ) {
         Column(Modifier.padding(Space.gutter)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(width = 4.dp, height = 18.dp)
-                        .background(hero.accent, RoundedCornerShape(2.dp)),
+                Image(
+                    painter = painterResource(R.drawable.redline_lockup),
+                    contentDescription = "Redline",
+                    modifier = Modifier.height(24.dp),
                 )
-                Text(
-                    text = "Redline",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 10.dp).weight(1f),
-                )
+                Spacer(Modifier.weight(1f))
                 if (!large) Assurances()
             }
             if (large) {
