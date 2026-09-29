@@ -1056,7 +1056,7 @@ internal fun Results(
                         // put two units on one screen and invited a subtraction that
                         // has no sensible answer, at the exact moment someone decides
                         // whether to trust the app with money.
-                        Text(unlockLabel(state.groups.size - 1, null), style = MaterialTheme.typography.labelLarge)
+                        Text(barLabel(state.groups.size - 1, lead, noteShown = !short), style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 }
@@ -1481,6 +1481,16 @@ internal fun severitySplit(high: Int, flagged: Int): String = when {
 internal fun unlockLabel(otherClauses: Int, price: String?): String {
     val what = if (otherClauses == 1) "the other clause" else "the other $otherClauses clauses"
     return "Show $what" + (price?.let { " for $it" } ?: "")
+}
+
+/**
+ * The report bar's button. Where the note above it is dropped, on a phone turned on its side,
+ * the price moves into the label, so the button still says it costs money before it opens the
+ * paywall.
+ */
+internal fun barLabel(otherClauses: Int, lead: String?, noteShown: Boolean): String {
+    val label = unlockLabel(otherClauses, null)
+    return if (noteShown || lead == null) label else "$label, ${lead.replaceFirstChar { it.lowercaseChar() }}"
 }
 
 /**
