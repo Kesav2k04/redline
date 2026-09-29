@@ -47,6 +47,41 @@ class InsightTest {
     }
 
     @Test
+    fun anAnnualInterestRateIsNotALateFee() {
+        // On a $2,000 rent this used to read "Late payment penalty of 12 percent" and put
+        // "Late fee, $240, each late payment" on the money card.
+        val clauses = listOf(
+            Clause(0, "The monthly rent is \$2,000 per month."),
+            Clause(1, "A late fee of \$50 plus interest at 12% per annum is payable on rent paid late."),
+        )
+        val findings = Scanner.ranked(clauses)
+        assertTrue("late-fee fired on the interest rate", findings.none { it.ruleId == "late-fee" })
+        assertTrue("the interest rate was lost", findings.any { it.ruleId == "interest-rate" })
+        val exposure = Insights.of(findings, clauses.size, null, clauses).exposure
+        assertTrue(exposure?.items.orEmpty().none { it.ruleId == "late-fee" })
+    }
+
+    @Test
+    fun theLateFeeCardQuotesTheFigureInTheHeadline() {
+        val clauses = listOf(
+            Clause(0, "The monthly rent is \$2,000 per month."),
+            Clause(1, "Rent increases by 10% each year; a late fee of 5% applies to rent paid late."),
+        )
+        val findings = Scanner.ranked(clauses)
+        assertEquals("Late payment penalty of 5 percent", findings.single { it.ruleId == "late-fee" }.headline)
+        val exposure = Insights.of(findings, clauses.size, null, clauses).exposure!!
+        // 5% of $2,000, not the 10% rent rise that comes first in the clause.
+        assertEquals(100L, exposure.amountOf(exposure.items.single { it.ruleId == "late-fee" }))
+    }
+
+    @Test
+    fun aDepositSumIsTheOneBesideTheWordDeposit() {
+        val clause = Clause(0, "The monthly rent is Rs. 1,00,000 and the security deposit of Rs. 50,000 shall be interest free.")
+        val exposure = Insights.of(Scanner.ranked(listOf(clause)), 1, null, listOf(clause)).exposure!!
+        assertEquals(50_000L, exposure.total())
+    }
+
+    @Test
     fun englandVoidsTheSection21Wording() {
         val clause = Clause(0, "The Landlord may serve notice under section 21 of the Housing Act 1988 to end the tenancy.")
         val findings = Scanner.ranked(listOf(clause), Place.ENGLAND)
