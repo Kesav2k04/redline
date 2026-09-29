@@ -124,6 +124,8 @@ data class ScanUi(
     val forgotten: SavedLease? = null,
     /** False until the first entitlement read lands. Distinct from `unlocked == false`. */
     val entitlementsKnown: Boolean = false,
+    /** True while the last entitlement read failed, so the screen knows to ask again. */
+    val entitlementFailed: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
     /**
@@ -228,6 +230,9 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         }
         viewModelScope.launch {
             Billing.known.collect { known -> _ui.update { it.copy(entitlementsKnown = known) } }
+        }
+        viewModelScope.launch {
+            Billing.readFailed.collect { failed -> _ui.update { it.copy(entitlementFailed = failed) } }
         }
         viewModelScope.launch {
             Billing.offering.collect { offering ->
@@ -486,6 +491,17 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
     }
 
     private var offerRetry: kotlinx.coroutines.Job? = null
+
+    /**
+     * Reads the entitlement again when the last read failed, so a buyer who opened the app
+     * offline gets the report back once the signal returns, without a restart.
+     */
+    fun retryEntitlement() {
+        if (!Billing.readFailed.value || entitlementRetry?.isActive == true) return
+        entitlementRetry = viewModelScope.launch { Billing.refresh() }
+    }
+
+    private var entitlementRetry: Job? = null
 
     /** Pro opens everything; a pass opens only the lease it was bought for. */
     private fun ScanUi.withAccess(): ScanUi =

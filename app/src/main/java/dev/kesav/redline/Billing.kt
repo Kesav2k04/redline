@@ -56,6 +56,14 @@ object Billing {
     private val _known = MutableStateFlow(false)
     val known: StateFlow<Boolean> = _known.asStateFlow()
 
+    /**
+     * True while the last entitlement read failed and nothing has answered since. [known] is set
+     * either way so the screen can be used, which left a buyer who reinstalled and opened the app
+     * offline locked out for the whole session. This is what says to ask again.
+     */
+    private val _readFailed = MutableStateFlow(false)
+    val readFailed: StateFlow<Boolean> = _readFailed.asStateFlow()
+
     /** False when no key is configured, so a clean clone still builds and runs. */
     var configured: Boolean = false
         private set
@@ -119,7 +127,10 @@ object Billing {
         }
         runCatching { Purchases.sharedInstance.awaitCustomerInfo() }
             .onSuccess { apply(it) }
-            .onFailure { Log.w(TAG, "Could not read entitlements: ${it.message}") }
+            .onFailure {
+                Log.w(TAG, "Could not read entitlements: ${it.message}")
+                _readFailed.value = true
+            }
         _known.value = true
     }
 
@@ -185,5 +196,7 @@ object Billing {
     private fun apply(info: CustomerInfo) {
         _unlocked.value = info.entitlements[ENTITLEMENT]?.isActive == true
         _oneTime.value = info.nonSubscriptionTransactions.map { it.productIdentifier }.toSet()
+        // Any answer, from a read, a purchase, a restore or the listener, ends a failed read.
+        _readFailed.value = false
     }
 }

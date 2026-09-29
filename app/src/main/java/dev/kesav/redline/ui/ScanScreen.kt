@@ -139,6 +139,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Activity
@@ -210,15 +211,26 @@ fun ScanScreen(
         }
     }
 
-    // A paywall with no price is an app that started offline. Keep asking, quietly, while
-    // it is on screen, so the price turns up when the signal does.
-    val priceMissing = ui.offer == null && !ui.unlocked &&
-        (ui.state as? ScanState.Scanned)?.sellable == true
-    LaunchedEffect(priceMissing) {
-        while (priceMissing) {
+    // A paywall with no price is an app that started offline, and so is a report left shut on a
+    // buyer whose entitlement could not be read. Keep asking, quietly, while it is on screen, so
+    // the price and the purchase both turn up when the signal does.
+    val asking = askStoreAgain(
+        pricesMissing = ui.offer == null,
+        readFailed = ui.entitlementFailed,
+        locked = !ui.unlocked && (ui.state as? ScanState.Scanned)?.sellable == true,
+    )
+    LaunchedEffect(asking) {
+        while (asking) {
             viewModel.retryOffer()
+            viewModel.retryEntitlement()
             delay(15_000)
         }
+    }
+    // Coming back to the app is often coming back to a signal, so a failed read is tried again
+    // at once rather than on the next tick.
+    LifecycleResumeEffect(Unit) {
+        viewModel.retryEntitlement()
+        onPauseOrDispose { }
     }
 
     // Without this, a back swipe on the results screen finishes the activity and closes
@@ -491,6 +503,13 @@ fun ScanScreen(
  */
 internal fun viewerLocks(state: ScanState.Scanned, unlocked: Boolean): Set<Int> =
     if (unlocked || !state.sellable) emptySet() else state.groups.drop(1).map { it.clause.index }.toSet()
+
+/**
+ * Whether the report keeps asking the store every so often: for prices that never arrived, or
+ * for an entitlement read that failed, while a locked report is there to be opened.
+ */
+internal fun askStoreAgain(pricesMissing: Boolean, readFailed: Boolean, locked: Boolean): Boolean =
+    locked && (pricesMissing || readFailed)
 
 /**
  * What the app looks for, written down where the reader can see it before paying.
