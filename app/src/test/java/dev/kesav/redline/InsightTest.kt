@@ -94,6 +94,23 @@ class InsightTest {
     }
 
     @Test
+    fun lakhAmountsAreReadAtTheirScale() {
+        // "Rs. 3 lakhs" used to read as Rs 3, "Rs 1.5 lakh" as Rs 2, and "2 lakh rupees" as
+        // one lakh, because the numeral or the scale word was read alone.
+        val deposits = mapOf(
+            "The Tenant shall pay a security deposit of Rs. 3 lakhs, which shall be interest free." to 300_000L,
+            "The Tenant shall pay a security deposit of Rs 1.5 lakh, which shall be interest free." to 150_000L,
+            "The Tenant shall pay a security deposit of 2 lakh rupees, which shall be interest free." to 200_000L,
+        )
+        for ((text, amount) in deposits) {
+            val clauses = listOf(Clause(0, text))
+            val exposure = Insights.of(Scanner.ranked(clauses), 1, null, clauses).exposure
+            assertEquals(text, amount, exposure?.total())
+            assertEquals(text, "₹", exposure?.symbol)
+        }
+    }
+
+    @Test
     fun englandVoidsTheSection21Wording() {
         val clause = Clause(0, "The Landlord may serve notice under section 21 of the Housing Act 1988 to end the tenancy.")
         val findings = Scanner.ranked(listOf(clause), Place.ENGLAND)

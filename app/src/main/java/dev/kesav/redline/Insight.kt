@@ -176,8 +176,9 @@ object Insights {
  */
 internal object Money {
 
-    private val symbolAmount = Regex("""(₹|rs\.?|inr|\$|usd|£|gbp)\s?(\d[\d,]*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-    private val amountWord = Regex("""(\d[\d,]*(?:\.\d+)?|(?:[a-z]+[ -]){0,3}[a-z]+)\s+(rupees|dollars|pounds)""", RegexOption.IGNORE_CASE)
+    private val symbolAmount = Regex("""(₹|rs\.?|inr|\$|usd|£|gbp)\s?(\d[\d,]*(?:\.\d+)?(?:\s*(?:lakhs?|crores?|thousand)\b)?)""", RegexOption.IGNORE_CASE)
+    private val amountWord = Regex("""(\d[\d,]*(?:\.\d+)?(?:\s*(?:lakhs?|crores?|thousand))?|(?:[a-z]+[ -]){0,3}[a-z]+)\s+(rupees|dollars|pounds)""", RegexOption.IGNORE_CASE)
+    private val numeralScale = Regex("""([\d,]+(?:\.\d+)?)\s*(lakhs?|crores?|thousand)?""", RegexOption.IGNORE_CASE)
     private val monthsOfRent = Regex("""(?<![\d.])(\d+(?:\.\d+)?|[a-z]+(?:[ -][a-z]+)?)\s+(?:calendar\s+)?months?'?s?\s+(?:of\s+(?:the\s+)?(?:monthly\s+)?)?rent""", RegexOption.IGNORE_CASE)
     private val percentOfRent = Regex("""(\d+(?:\.\d+)?|[a-z]+(?:[ -][a-z]+)?)\s*(?:percent|per cent|%)\s+(?:of\s+(?:the\s+)?(?:monthly\s+)?rent)?""", RegexOption.IGNORE_CASE)
     private val rentStated = Regex(
@@ -300,14 +301,26 @@ internal object Money {
     fun sums(text: String): List<Sum> {
         val out = mutableListOf<Sum>()
         symbolAmount.findAll(text).forEach { m ->
-            val amount = m.groupValues[2].replace(",", "").toDoubleOrNull() ?: return@forEach
+            val amount = scaled(m.groupValues[2]) ?: return@forEach
             out += Sum(symbolOf(m.groupValues[1]), amount.roundToLong(), m.range)
         }
         amountWord.findAll(text).forEach { m ->
-            val amount = tail(m.groupValues[1]) ?: return@forEach
+            val amount = scaled(m.groupValues[1]) ?: tail(m.groupValues[1]) ?: return@forEach
             out += Sum(symbolOf(m.groupValues[2]), amount.roundToLong(), m.range)
         }
         return out.filter { it.amount > 0 }
+    }
+
+    /** "3", "1.5 lakh" or "2 crores" as a number. The scale multiplies the whole numeral, decimals included. */
+    private fun scaled(raw: String): Double? {
+        val m = numeralScale.matchEntire(raw.trim()) ?: return null
+        val n = m.groupValues[1].replace(",", "").toDoubleOrNull() ?: return null
+        return n * when (m.groupValues[2].lowercase()) {
+            "thousand" -> 1_000.0
+            "lakh", "lakhs" -> 100_000.0
+            "crore", "crores" -> 10_000_000.0
+            else -> 1.0
+        }
     }
 
     private fun sum(raw: String): Sum? = sums(raw).firstOrNull()
