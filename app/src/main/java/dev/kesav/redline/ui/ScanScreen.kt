@@ -1303,10 +1303,12 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                         shape = RoundedCornerShape(8.dp),
                         color = hero.content.copy(alpha = 0.08f),
                         contentColor = hero.content,
-                        modifier = Modifier.fillMaxWidth().height(48.dp).rise(blocks[4]),
+                        // A minimum, not a fixed height: from about 1.3x the label wraps, and a
+                        // fixed 48dp cut its second line off.
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).rise(blocks[4]),
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
                         ) {
