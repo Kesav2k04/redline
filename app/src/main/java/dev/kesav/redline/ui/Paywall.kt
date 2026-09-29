@@ -169,7 +169,7 @@ internal fun PaywallSheet(
             Spacer(Modifier.height(Space.xl))
             Benefit(RedlineIcons.Documents, "Each flagged clause, quoted in full", "With the reason and the fair wording to ask for")
             Benefit(RedlineIcons.Calculator, "Where the money goes", "Every sum the lease states, and the clause it sits in")
-            Benefit(RedlineIcons.Pen, "Replies drafted for you", "An email and a WhatsApp message, one tap to send")
+            Benefit(RedlineIcons.Pen, "Replies drafted for you", "An email or a WhatsApp message, ready to send")
             Benefit(RedlineIcons.Download, "The report as a PDF", "To hand to a parent, a friend or a lawyer")
 
             Spacer(Modifier.height(Space.xl))
