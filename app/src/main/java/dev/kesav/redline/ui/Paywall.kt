@@ -346,7 +346,7 @@ internal fun ctaLabel(offer: Offer?): String = when {
 internal fun termsLine(offer: Offer?): String = when (offer?.plan) {
     null -> "Prices come from the store in your own currency."
     Plan.PASS -> "One payment of ${offer.price}. Opens this lease only, on this phone. No subscription."
-    Plan.PRO_LIFETIME -> "One payment of ${offer.price}. Every lease you scan, for as long as you keep the app. No subscription."
+    Plan.PRO_LIFETIME -> "One payment of ${offer.price}. Every lease you scan. No subscription."
     Plan.PRO_ANNUAL, Plan.PRO_MONTHLY -> {
         val every = if (offer.plan == Plan.PRO_ANNUAL) "year" else "month"
         if (offer.trial != null) {
