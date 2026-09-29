@@ -47,8 +47,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,6 +86,7 @@ internal fun PaywallSheet(
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
     storeKey: Boolean = true,
+    message: String? = null,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = LocalHapticFeedback.current
@@ -232,6 +235,19 @@ internal fun PaywallSheet(
             }
 
             Spacer(Modifier.height(Space.l))
+            // What the last purchase or restore came to. The snackbar draws under this sheet,
+            // so a message sent there is never seen from here.
+            if (message != null) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = Space.m)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
             val offer = offers.firstOrNull { it.plan == chosen }
             val press = remember { MutableInteractionSource() }
             Button(

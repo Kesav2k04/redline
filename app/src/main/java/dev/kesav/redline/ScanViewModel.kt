@@ -126,6 +126,11 @@ data class ScanUi(
     val entitlementsKnown: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
+    /**
+     * What the last purchase or restore came to, in plain words. The paywall sheet draws above
+     * the snackbar, so this shows in the sheet while it is open and in the snackbar otherwise.
+     */
+    val storeMessage: String? = null,
     val offer: Package? = null,
     /** What the reader is waiting on while a PDF or photo is read, or null when idle. */
     val reading: String? = null,
@@ -166,6 +171,17 @@ data class ScanUi(
  */
 internal fun chooseOffer(types: List<PackageType>): Int? =
     types.indexOf(PackageType.LIFETIME).takeIf { it >= 0 }
+
+internal const val PRO_NOT_ON = "Payment went through, but Renter Pro did not switch on. Tap Restore."
+
+/**
+ * What the sheet says once the store reports a purchase as made. A Pro plan that comes back
+ * without the entitlement means the product is not attached to it on the dashboard: the reader
+ * has paid and nothing opened, which must never pass in silence. A pass opens by the lease's
+ * fingerprint rather than by the entitlement, so it has nothing to report here.
+ */
+internal fun afterPurchase(plan: Plan, entitled: Boolean): String? =
+    if (plan != Plan.PASS && !entitled) PRO_NOT_ON else null
 
 class ScanViewModel(app: Application, private val saved: SavedStateHandle) : AndroidViewModel(app) {
 
@@ -422,7 +438,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     fun buy(activity: Activity, plan: Plan? = null) {
         viewModelScope.launch {
-            _ui.update { it.copy(busy = true, message = null) }
+            _ui.update { it.copy(busy = true, message = null, storeMessage = null) }
             // The app says it works offline, and it does, which means it can start with
             // no offering at all. The offering was only ever fetched at launch, so a
             // reader who scanned on the metro and then got signal was told no offering
@@ -448,7 +464,11 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                         prefs().edit().putStringSet(KEY_PASSES, passes).apply()
                         _ui.update { it.copy(passes = passes) }
                     }
-                    _ui.update { it.copy(busy = false).withAccess() }
+                    val note = afterPurchase(chosen.plan, Billing.unlocked.value)
+                    if (note != null) {
+                        Log.e("Billing", "Bought ${chosen.pkg.product.id}, but ${Billing.ENTITLEMENT} is not active.")
+                    }
+                    _ui.update { it.copy(busy = false, storeMessage = note).withAccess() }
                 }
                 Billing.Outcome.Cancelled -> _ui.update { it.copy(busy = false) }
                 is Billing.Outcome.Failed -> _ui.update { it.copy(busy = false, message = outcome.message) }
@@ -478,7 +498,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     fun restore() {
         viewModelScope.launch {
-            _ui.update { it.copy(busy = true, message = null) }
+            _ui.update { it.copy(busy = true, message = null, storeMessage = null) }
             val error = Billing.restore()
             _ui.update { it.copy(busy = false, message = error) }
         }
@@ -495,6 +515,10 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     fun dismissMessage() {
         _ui.update { it.copy(message = null) }
+    }
+
+    fun dismissStoreMessage() {
+        _ui.update { it.copy(storeMessage = null) }
     }
 
     private companion object {

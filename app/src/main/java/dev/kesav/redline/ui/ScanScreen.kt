@@ -195,6 +195,7 @@ fun ScanScreen(
         if (done) {
             if (paywall == PaywallReason.COMPARE) comparing = true
             paywall = null
+            viewModel.dismissStoreMessage()
         }
     }
 
@@ -256,6 +257,17 @@ fun ScanScreen(
         ui.message?.let {
             snackbar.showSnackbar(it)
             viewModel.dismissMessage()
+        }
+    }
+
+    // The paywall shows the store's answer itself. One that lands while the sheet is closed,
+    // from the report's own Restore or after Not now, is said here instead. Read from the view
+    // model rather than this frame, so a line the sheet has just cleared is not said twice.
+    LaunchedEffect(ui.storeMessage, paywall == null) {
+        val note = viewModel.ui.value.storeMessage
+        if (paywall == null && note != null) {
+            snackbar.showSnackbar(note)
+            viewModel.dismissStoreMessage()
         }
     }
 
@@ -397,9 +409,13 @@ fun ScanScreen(
                 onBuy = { plan -> activity?.let { viewModel.buy(it, plan) } },
                 onRestore = viewModel::restore,
                 onRetry = viewModel::retryOffer,
-                onDismiss = { paywall = null },
+                onDismiss = {
+                    paywall = null
+                    viewModel.dismissStoreMessage()
+                },
                 // Fixed at launch: set once by Billing.start from the build's key.
                 storeKey = Billing.configured,
+                message = ui.storeMessage,
             )
         }
         if (choosingPlace) {
