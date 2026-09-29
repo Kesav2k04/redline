@@ -139,8 +139,11 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Activity
 import android.content.ContextWrapper
@@ -215,15 +218,20 @@ fun ScanScreen(
     // buyer whose entitlement could not be read. Keep asking, quietly, while it is on screen, so
     // the price and the purchase both turn up when the signal does.
     val asking = askStoreAgain(
-        pricesMissing = ui.offer == null,
+        pricesMissing = ui.offers.isEmpty() && Billing.configured,
         readFailed = ui.entitlementFailed,
         locked = !ui.unlocked && (ui.state as? ScanState.Scanned)?.sellable == true,
+        paywallOpen = paywall != null,
     )
-    LaunchedEffect(asking) {
-        while (asking) {
-            viewModel.retryOffer()
-            viewModel.retryEntitlement()
-            delay(15_000)
+    // Only while the app is in front: nobody is waiting on a price from the background.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(asking, lifecycle) {
+        if (asking) lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                viewModel.retryOffer()
+                viewModel.retryEntitlement()
+                delay(15_000)
+            }
         }
     }
     // Coming back to the app is often coming back to a signal, so a failed read is tried again
@@ -439,6 +447,7 @@ fun ScanScreen(
                 // Fixed at launch: set once by Billing.start from the build's key.
                 storeKey = Billing.configured,
                 message = ui.storeMessage,
+                storeReached = ui.storeReached,
             )
         }
         if (choosingPlace) {
@@ -506,10 +515,11 @@ internal fun viewerLocks(state: ScanState.Scanned, unlocked: Boolean): Set<Int> 
 
 /**
  * Whether the report keeps asking the store every so often: for prices that never arrived, or
- * for an entitlement read that failed, while a locked report is there to be opened.
+ * for an entitlement read that failed, while a locked report or an open paywall is waiting on
+ * it. The paywall counts on its own: Compare opens one over a lease with nothing locked.
  */
-internal fun askStoreAgain(pricesMissing: Boolean, readFailed: Boolean, locked: Boolean): Boolean =
-    locked && (pricesMissing || readFailed)
+internal fun askStoreAgain(pricesMissing: Boolean, readFailed: Boolean, locked: Boolean, paywallOpen: Boolean = false): Boolean =
+    (locked || paywallOpen) && (pricesMissing || readFailed)
 
 /**
  * What the app looks for, written down where the reader can see it before paying.

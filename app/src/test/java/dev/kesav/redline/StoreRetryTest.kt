@@ -31,4 +31,11 @@ class StoreRetryTest {
     fun `an open report never polls`() {
         assertFalse(askStoreAgain(pricesMissing = true, readFailed = true, locked = false))
     }
+
+    @Test
+    fun `an open paywall asks for prices even over a lease with nothing locked`() {
+        // Compare opens the paywall on a lease with one flagged clause, which locks nothing.
+        assertTrue(askStoreAgain(pricesMissing = true, readFailed = false, locked = false, paywallOpen = true))
+        assertFalse(askStoreAgain(pricesMissing = false, readFailed = false, locked = false, paywallOpen = true))
+    }
 }

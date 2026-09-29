@@ -137,11 +137,28 @@ object Billing {
         _known.value = true
     }
 
+    /**
+     * Whether the last offering fetch got an answer from the store, whatever it held. An offering
+     * with nothing the paywall can sell looks the same as no connection from the offering alone,
+     * and the two need different words.
+     */
+    private val _storeReached = MutableStateFlow(false)
+    val storeReached: StateFlow<Boolean> = _storeReached.asStateFlow()
+
     suspend fun loadOffering() {
         if (!configured) return
         runCatching { Purchases.sharedInstance.awaitOfferings() }
-            .onSuccess { _offering.value = it.current }
-            .onFailure { Log.w(TAG, "Could not load offerings: ${it.message}") }
+            .onSuccess {
+                _offering.value = it.current
+                _storeReached.value = true
+            }
+            .onFailure {
+                Log.w(TAG, "Could not load offerings: ${it.message}")
+                // Play reports a dropped connection as a store problem as often as a network one.
+                val code = (it as? PurchasesException)?.code
+                _storeReached.value = code != null &&
+                    code != PurchasesErrorCode.NetworkError && code != PurchasesErrorCode.StoreProblemError
+            }
     }
 
     /** How a purchase ended. A cancel is its own outcome, never an error to show. */

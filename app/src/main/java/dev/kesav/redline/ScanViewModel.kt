@@ -126,6 +126,8 @@ data class ScanUi(
     val entitlementsKnown: Boolean = false,
     /** True while the last entitlement read failed, so the screen knows to ask again. */
     val entitlementFailed: Boolean = false,
+    /** Whether the last offering fetch reached the store. With no offers, "not on sale" rather than offline. */
+    val storeReached: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
     /**
@@ -233,6 +235,9 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         }
         viewModelScope.launch {
             Billing.readFailed.collect { failed -> _ui.update { it.copy(entitlementFailed = failed) } }
+        }
+        viewModelScope.launch {
+            Billing.storeReached.collect { reached -> _ui.update { it.copy(storeReached = reached) } }
         }
         viewModelScope.launch {
             Billing.offering.collect { offering ->
@@ -487,10 +492,11 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     /**
      * Fetches the offering again when the paywall is on screen without one, so the price
-     * appears on the button once the phone is back online rather than never.
+     * appears on the button once the phone is back online rather than never. Keyed on every
+     * plan, not the lifetime one alone, which kept polling an offering that sold only monthly.
      */
     fun retryOffer() {
-        if (_ui.value.offer != null || offerRetry?.isActive == true) return
+        if (_ui.value.offers.isNotEmpty() || offerRetry?.isActive == true) return
         offerRetry = viewModelScope.launch { Billing.loadOffering() }
     }
 

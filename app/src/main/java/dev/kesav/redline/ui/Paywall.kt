@@ -32,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +40,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,6 +60,7 @@ import dev.kesav.redline.Offer
 import dev.kesav.redline.Plan
 import dev.kesav.redline.ScanState
 import dev.kesav.redline.Severity
+import kotlinx.coroutines.delay
 
 /** Why the paywall opened, so its headline can answer the tap that raised it. */
 internal enum class PaywallReason { REPORT, DRAFT, COMPARE }
@@ -87,6 +90,7 @@ internal fun PaywallSheet(
     onDismiss: () -> Unit,
     storeKey: Boolean = true,
     message: String? = null,
+    storeReached: Boolean = false,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = LocalHapticFeedback.current
@@ -102,8 +106,19 @@ internal fun PaywallSheet(
         else -> passOffer?.plan ?: proOffers.firstOrNull()?.plan
     }
     var chosen by rememberSaveable(offers.map { it.plan }) { mutableStateOf(defaultPlan) }
-    // Without a store key there is nothing to reach, so asking again would only spin.
-    LaunchedEffect(offers.isEmpty()) { if (offers.isEmpty() && storeKey) onRetry() }
+    // Without a store key there is nothing to reach, so asking again would only spin. With one,
+    // the wait gets about ten seconds before the sheet says there is no connection and offers
+    // to try again, and trying again starts the wait over.
+    var tries by remember { mutableIntStateOf(0) }
+    var waited by remember { mutableStateOf(false) }
+    LaunchedEffect(offers.isEmpty(), tries) {
+        waited = false
+        if (offers.isEmpty() && storeKey) {
+            onRetry()
+            delay(OFFLINE_AFTER_MILLIS)
+            waited = true
+        }
+    }
 
     val locked = (state.groups.size - 1).coerceAtLeast(0)
     val serious = state.groups.drop(1).count { it.worst == Severity.HIGH }
@@ -159,17 +174,30 @@ internal fun PaywallSheet(
 
             Spacer(Modifier.height(Space.xl))
             if (offers.isEmpty()) {
+                // The store answered with nothing to sell, or the wait ran out: either way the
+                // spinner would be a promise, so it goes and a way to ask again takes its place.
+                val stuck = storeKey && (storeReached || waited)
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 88.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.m),
                 ) {
-                    if (storeKey) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    if (storeKey && !stuck) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     Text(
-                        noOffersLine(storeKey),
+                        noOffersLine(storeKey, reached = storeReached, waited = waited),
                         style = MaterialTheme.typography.bodyMedium,
                         color = scheme.onSurfaceVariant,
                     )
+                }
+                if (stuck) {
+                    OutlinedButton(
+                        onClick = { tries++ },
+                        shape = MaterialTheme.shapes.medium,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurface),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    ) {
+                        Text("Try again")
+                    }
                 }
             } else {
                 Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Space.m)) {
@@ -292,11 +320,18 @@ internal fun PaywallSheet(
 
 /**
  * What stands in for the plan cards while there are no offers. With a store key the wait is
- * real and ends; a build made without one never gets offers, so it says so once and stops.
+ * real and ends; a build made without one never gets offers, so it says so once and stops. A
+ * store that answered with nothing to sell is not a lost connection, and is not called one.
  */
-internal fun noOffersLine(storeKey: Boolean): String =
-    if (storeKey) "Reaching the store for prices. Your scan is kept."
-    else "This build has no store key, so purchases are off. The v1.0.0 Release APK on GitHub has them."
+internal fun noOffersLine(storeKey: Boolean, reached: Boolean = false, waited: Boolean = false): String = when {
+    !storeKey -> "This build has no store key, so purchases are off. The v1.0.0 Release APK on GitHub has them."
+    reached -> "Purchases are not available right now."
+    waited -> "No connection. Prices need the internet. Your scan is kept."
+    else -> "Reaching the store for prices. Your scan is kept."
+}
+
+/** How long the sheet waits on the store before it says there is no connection. */
+internal const val OFFLINE_AFTER_MILLIS = 10_000L
 
 internal fun ctaLabel(offer: Offer?): String = when {
     offer == null -> "Choose a plan"
