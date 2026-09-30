@@ -18,6 +18,11 @@ data class Finding(
     val severity: Severity,
     /** Blank only in hand-built test findings; every rule supplies one. */
     val ask: String = "",
+    /**
+     * The number the rule read, for rules that read one. The money card quotes this figure,
+     * so it cannot name a different percentage from the headline above it.
+     */
+    val quantity: Numbers.Quantity? = null,
 )
 
 /**
@@ -52,6 +57,12 @@ private class Pattern(
      * clause routinely puts a subordinate clause between the two.
      */
     val reach: Int = 120,
+    /**
+     * What the words straight after the quantity's unit must match for the quantity to
+     * count. "12% per annum" is an interest rate, and the late-fee rule must not read it
+     * as a late fee. "A 12-month lease" is the term, not a deposit of twelve months.
+     */
+    val after: Regex? = null,
     val headline: (String?) -> String,
     val reason: String,
     /**
@@ -66,7 +77,7 @@ private class Pattern(
 ) {
     /** The same rule with a different floor, for a place whose cap sits below the default. */
     fun withAtLeast(floor: Int) = Pattern(
-        id, topic, severity, all, none, unit, floor, below, near, reach, headline, reason, ask,
+        id, topic, severity, all, none, unit, floor, below, near, reach, after, headline, reason, ask,
     )
 
     fun check(clause: Clause): Finding? {
@@ -75,13 +86,15 @@ private class Pattern(
         if (none.any { it.containsMatchIn(text) }) return null
 
         var shown: String? = null
+        var matched: Numbers.Quantity? = null
         if (unit != null) {
             val q = quantity(text) ?: return null
             if (atLeast != null && q.value < atLeast) return null
             if (below != null && q.value >= below) return null
             shown = q.shown
+            matched = q
         }
-        return Finding(clause, id, topic, headline(shown), reason, severity, ask)
+        return Finding(clause, id, topic, headline(shown), reason, severity, ask, matched)
     }
 
     /**
@@ -97,7 +110,7 @@ private class Pattern(
      * the whole clause is exactly the behaviour that produced the false headlines.
      */
     private fun quantity(text: String): Numbers.Quantity? {
-        val found = Numbers.quantities(text, unit ?: return null)
+        val found = Numbers.quantities(text, unit ?: return null).filter { afterFits(text, it) }
         val anchor = near ?: return found.firstOrNull()
         val anchors = anchor.findAll(text).map { it.range }.toList()
         if (anchors.isEmpty()) return null
@@ -106,6 +119,11 @@ private class Pattern(
             .filter { (_, d) -> d <= reach }
             .minByOrNull { (_, d) -> d }
             ?.first
+    }
+
+    private fun afterFits(text: String, q: Numbers.Quantity): Boolean {
+        val from = q.at.last + 1
+        return after == null || after.find(text, from)?.range?.first == from
     }
 
     private fun gap(a: IntRange, b: IntRange): Int = when {
@@ -142,6 +160,8 @@ private val patterns = listOf(
         none = listOf(Regex("\\bbase rate")),
         unit = PERCENT, atLeast = 3,
         near = Regex("\\b(?:penalty|penal|charge|fee|fine|surcharge|interest)\\w*"), reach = 40,
+        // A yearly rate is the interest-rate rule's to report, even beside "late fee".
+        after = Regex("(?!\\s*(?:per annum|p\\.a\\.|a year|per year|annual|yearly))"),
         headline = { "Late payment penalty of $it percent" },
         reason = "A penalty this size compounds quickly, and it lands on top of rent that " +
             "is already owed.",
@@ -176,6 +196,8 @@ private val patterns = listOf(
         id = "deposit-size", topic = "Your deposit", severity = Severity.HIGH,
         all = listOf(Regex("\\b(?:deposit)")),
         unit = MONTHS, atLeast = 4, near = Regex("\\bdeposit"),
+        // Months of rent, the shape Money prices. "This 12-month lease" is the term.
+        after = Regex("'?s?\\s+(?:of\\s+(?:the\\s+)?(?:monthly\\s+)?)?rent"),
         headline = { "Deposit equal to $it months rent" },
         reason = "India's Model Tenancy Act proposes two months for a home, England caps most " +
             "deposits at five weeks' rent, and New York, Massachusetts and, for most landlords, " +

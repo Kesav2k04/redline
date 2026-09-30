@@ -108,6 +108,24 @@ class AdversarialTest {
     }
 
     @Test
+    fun `the length of the lease is not the size of the deposit`() {
+        val clauses = listOf(
+            "Tenant shall deposit \$1,500 as security for this 12-month lease.",
+            "The Licensee has paid a security deposit of Rs. 1,00,000, refundable at the end of 11 months.",
+        )
+        for (c in clauses) {
+            assertTrue("deposit-size fired on: $c", "deposit-size" !in rules(c))
+            // California's cap is one month, so a misread here also cites Civil Code 1950.5.
+            val inCalifornia = Scanner.scan(ClauseSplitter.split(c), Place.CALIFORNIA).map { it.ruleId }
+            assertTrue("deposit-size fired in California on: $c", "deposit-size" !in inCalifornia)
+        }
+        assertEquals(
+            "Deposit equal to 10 months rent",
+            finding("The Tenant shall deposit a sum equivalent to ten months rent.", "deposit-size")?.headline,
+        )
+    }
+
+    @Test
     fun `the late fee is the percentage beside the charge, not the first one in the clause`() {
         val c = "The rent shall be escalated by ten percent annually, and any rent unpaid after " +
             "the due date attracts a late charge of four percent."

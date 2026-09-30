@@ -51,15 +51,20 @@ object ClauseSplitter {
                     return@forEachIndexed
                 }
 
-                // "mainten-\nance" is one word broken by the wrap, not two.
-                if (trimmed.endsWith("-") && !trimmed.endsWith("--")) {
+                val next = lines.getOrNull(i + 1)?.trim()
+
+                // "mainten-\nance" is one word broken by the wrap, not two. "Rs. 25,000/-"
+                // closes an amount, and the numbered clause under it stays its own.
+                if (trimmed.endsWith("-") && !trimmed.endsWith("--") &&
+                    trimmed.getOrNull(trimmed.length - 2)?.isLetter() == true &&
+                    next?.firstOrNull()?.isLowerCase() == true
+                ) {
                     append(trimmed.dropLast(1))
                     return@forEachIndexed
                 }
 
                 append(trimmed)
 
-                val next = lines.getOrNull(i + 1)?.trim()
                 when {
                     next.isNullOrEmpty() -> append("\n\n")
                     // A new numbered item starts a new block even without a blank line.

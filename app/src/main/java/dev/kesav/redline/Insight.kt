@@ -176,16 +176,17 @@ object Insights {
  */
 internal object Money {
 
-    private val symbolAmount = Regex("""(₹|rs\.?|inr|\$|usd|£|gbp)\s?(\d[\d,]*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-    private val amountWord = Regex("""(\d[\d,]*(?:\.\d+)?|(?:[a-z]+[ -]){0,3}[a-z]+)\s+(rupees|dollars|pounds)""", RegexOption.IGNORE_CASE)
-    private val monthsOfRent = Regex("""(\d+|[a-z]+(?:[ -][a-z]+)?)\s+(?:calendar\s+)?months?'?s?\s+(?:of\s+(?:the\s+)?(?:monthly\s+)?)?rent""", RegexOption.IGNORE_CASE)
+    private val symbolAmount = Regex("""(₹|rs\.?|inr|\$|usd|£|gbp)\s?(\d[\d,]*(?:\.\d+)?(?:\s*(?:lakhs?|crores?|thousand)\b)?)""", RegexOption.IGNORE_CASE)
+    private val amountWord = Regex("""(\d[\d,]*(?:\.\d+)?(?:\s*(?:lakhs?|crores?|thousand))?|(?:[a-z]+[ -]){0,3}[a-z]+)\s+(rupees|dollars|pounds)""", RegexOption.IGNORE_CASE)
+    private val numeralScale = Regex("""([\d,]+(?:\.\d+)?)\s*(lakhs?|crores?|thousand)?""", RegexOption.IGNORE_CASE)
+    private val monthsOfRent = Regex("""(?<![\d.])(\d+(?:\.\d+)?|[a-z]+(?:[ -][a-z]+)?)\s+(?:calendar\s+)?months?'?s?\s+(?:of\s+(?:the\s+)?(?:monthly\s+)?)?rent""", RegexOption.IGNORE_CASE)
     private val percentOfRent = Regex("""(\d+(?:\.\d+)?|[a-z]+(?:[ -][a-z]+)?)\s*(?:percent|per cent|%)\s+(?:of\s+(?:the\s+)?(?:monthly\s+)?rent)?""", RegexOption.IGNORE_CASE)
     private val rentStated = Regex(
         """(?:monthly rent|rent)\D{0,40}?((?:₹|rs\.?|inr|\$|usd|£|gbp)\s?\d[\d,]*(?:\.\d+)?)\s*(?:per month|a month|each month|every month|monthly|per mensem|/\s?month)""",
         RegexOption.IGNORE_CASE,
     )
 
-    data class Sum(val symbol: String, val amount: Long)
+    data class Sum(val symbol: String, val amount: Long, val at: IntRange = IntRange.EMPTY)
 
     fun exposure(findings: List<Finding>, clauses: List<Clause>): Exposure? {
         val rent = clauses.firstNotNullOfOrNull { c -> rentStated.find(c.text)?.groupValues?.get(1)?.let(::sum) }
@@ -203,6 +204,8 @@ internal object Money {
         val text = clause.text
         val ids = fs.map { it.ruleId }.toSet()
         fun pick(vararg rule: String) = rule.firstOrNull { it in ids }
+        // Where the rule read its number, so the card quotes that one and not the first in the clause.
+        fun readAt(rule: String) = fs.first { it.ruleId == rule }.quantity?.at
 
         pick("liquidated-damages", "unexpired-liability", "lock-in")?.let { id ->
             monthsIn(text)?.let { (n, shown) -> return Cost(id, clause.index, "Payable if you leave early", n, 0, "\"$shown\" is payable on leaving early.") }
@@ -213,7 +216,7 @@ internal object Money {
                 monthsIn(text)?.let { (n, shown) ->
                     return Cost(id, clause.index, "Deposit the landlord holds", n, 0, "A deposit of \"$shown\", returned at the landlord's pace and discretion.")
                 }
-                sums(text).maxByOrNull { it.amount }?.let {
+                nearest(sums(text), text, "deposit")?.let {
                     return Cost(id, clause.index, "Deposit the landlord holds", 0.0, it.amount, "A deposit of ${show(it)}, returned at the landlord's pace and discretion.")
                 }
             }
@@ -227,20 +230,21 @@ internal object Money {
             }
         }
         pick("late-fee")?.let { id ->
-            percentIn(text)?.let { (p, shown) ->
+            percentIn(text, readAt(id))?.let { (p, shown) ->
                 return Cost(id, clause.index, "Late fee", p / 100.0, 0, "\"$shown\" of the rent" + if (text.contains("week", true)) ", for each week late." else ".", every = if (text.contains("week", true)) "each week late" else "each late payment")
             }
-            sums(text).maxByOrNull { it.amount }?.let {
+            // The rule read a percentage. The largest sum elsewhere in the clause is not the fee.
+            sums(text).takeIf { readAt(id) == null }?.maxByOrNull { it.amount }?.let {
                 return Cost(id, clause.index, "Late fee", 0.0, it.amount, "The clause charges ${show(it)} when rent is late.", every = "each late payment")
             }
         }
         pick("rent-escalation", "charge-increases", "unilateral-revision")?.let { id ->
-            percentIn(text)?.let { (p, shown) ->
+            percentIn(text, readAt(id))?.let { (p, shown) ->
                 return Cost(id, clause.index, "Rent rise", p / 100.0, 0, "Rent goes up by \"$shown\" on the clause's own schedule.", every = "each rise")
             }
         }
         pick("occupant-surcharge")?.let { id ->
-            percentIn(text)?.let { (p, shown) ->
+            percentIn(text, readAt(id))?.let { (p, shown) ->
                 return Cost(id, clause.index, "Extra occupant surcharge", p / 100.0, 0, "Rent rises by \"$shown\" for each extra occupant.", every = "each month")
             }
         }
@@ -268,10 +272,21 @@ internal object Money {
             .mapNotNull { m -> tail(m.groupValues[1])?.let { n -> n to m.value.trim() } }
             .maxByOrNull { it.first }
 
-    private fun percentIn(text: String): Pair<Double, String>? =
+    /** The percentage written over [at], where the rule read one, or else the first plausible one. */
+    private fun percentIn(text: String, at: IntRange? = null): Pair<Double, String>? =
         percentOfRent.findAll(text)
+            .filter { m -> at == null || (m.range.first <= at.last && at.first <= m.range.last) }
             .mapNotNull { m -> tail(m.groupValues[1])?.let { n -> n to m.value.trim() } }
             .firstOrNull { it.first in 0.5..100.0 }
+
+    /** The sum written closest to [word]. "Rent of Rs. 1,00,000 and a deposit of Rs. 50,000" holds 50,000. */
+    private fun nearest(found: List<Sum>, text: String, word: String): Sum? {
+        val anchors = Regex("\\b$word", RegexOption.IGNORE_CASE).findAll(text).map { it.range }.toList()
+        if (anchors.isEmpty()) return found.maxByOrNull { it.amount }
+        return found.minByOrNull { s ->
+            anchors.minOf { a -> if (s.at.last < a.first) a.first - s.at.last else maxOf(0, s.at.first - a.last) }
+        }
+    }
 
     /** A number written in digits or words, taking the longest run of trailing words that reads as one. */
     private fun tail(raw: String): Double? {
@@ -286,14 +301,26 @@ internal object Money {
     fun sums(text: String): List<Sum> {
         val out = mutableListOf<Sum>()
         symbolAmount.findAll(text).forEach { m ->
-            val amount = m.groupValues[2].replace(",", "").toDoubleOrNull() ?: return@forEach
-            out += Sum(symbolOf(m.groupValues[1]), amount.roundToLong())
+            val amount = scaled(m.groupValues[2]) ?: return@forEach
+            out += Sum(symbolOf(m.groupValues[1]), amount.roundToLong(), m.range)
         }
         amountWord.findAll(text).forEach { m ->
-            val amount = tail(m.groupValues[1]) ?: return@forEach
-            out += Sum(symbolOf(m.groupValues[2]), amount.roundToLong())
+            val amount = scaled(m.groupValues[1]) ?: tail(m.groupValues[1]) ?: return@forEach
+            out += Sum(symbolOf(m.groupValues[2]), amount.roundToLong(), m.range)
         }
         return out.filter { it.amount > 0 }
+    }
+
+    /** "3", "1.5 lakh" or "2 crores" as a number. The scale multiplies the whole numeral, decimals included. */
+    private fun scaled(raw: String): Double? {
+        val m = numeralScale.matchEntire(raw.trim()) ?: return null
+        val n = m.groupValues[1].replace(",", "").toDoubleOrNull() ?: return null
+        return n * when (m.groupValues[2].lowercase()) {
+            "thousand" -> 1_000.0
+            "lakh", "lakhs" -> 100_000.0
+            "crore", "crores" -> 10_000_000.0
+            else -> 1.0
+        }
     }
 
     private fun sum(raw: String): Sum? = sums(raw).firstOrNull()
