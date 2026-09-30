@@ -5,6 +5,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.kesav.redline.ClauseSplitter
 import dev.kesav.redline.ScanState
@@ -72,7 +73,7 @@ class OfflinePaywallTest {
         compose.onNodeWithText("No connection. Prices need the internet. Your scan is kept.").assertExists()
 
         val before = retries
-        compose.onNodeWithText("Try again").performClick()
+        compose.onNodeWithText("Try again").performScrollTo().performClick()
         compose.waitForIdle()
         assertTrue("Try again asks the store", retries > before)
         // Asking again starts the wait over rather than repeating the failure at once.
