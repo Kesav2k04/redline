@@ -145,7 +145,7 @@ object LeaseImport {
 
                     val text = PageText.assemble(pages)
                     return if (text.isBlank()) {
-                        Result.Failed("No text found in that PDF.")
+                        Result.Failed("No text found. Try Scan paper, or paste the text.")
                     } else {
                         Result.Read(text, name, Kind.PDF, count, total, recognised)
                     }
