@@ -110,6 +110,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -1594,6 +1596,11 @@ private fun ClauseCard(
                 contentDescription = spoken
                 if (onToggle != null) {
                     onClick(label = if (expanded) "fold the clause" else "open the clause") { onToggle(); true }
+                }
+                // The card speaks as one node, which hid the button inside it from TalkBack, so
+                // the button is offered as an action wherever it is on screen.
+                if (expanded && onView != null) {
+                    customActions = listOf(CustomAccessibilityAction("See it in the lease") { onView(); true })
                 }
             },
     ) {

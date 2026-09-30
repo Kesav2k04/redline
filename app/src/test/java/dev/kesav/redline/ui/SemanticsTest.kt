@@ -2,6 +2,9 @@ package dev.kesav.redline.ui
 
 import android.app.Application
 import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -17,6 +20,7 @@ import dev.kesav.redline.ClauseSplitter
 import dev.kesav.redline.ScanState
 import dev.kesav.redline.Scanner
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -67,6 +71,33 @@ class SemanticsTest {
         compose.onNode(hasContentDescription(first, substring = true)).assertHasClickAction()
         // The rows show severity by colour only, so the sentence has to say it.
         compose.onNode(hasContentDescription(", serious", substring = true)).assertHasClickAction()
+    }
+
+    @Test
+    fun `an open clause card offers See it in the lease as an action`() {
+        var opened: Int? = null
+        compose.setContent {
+            RedlineTheme {
+                Surface {
+                    Results(
+                        state = state, unlocked = true, known = true, busy = false, price = "$99.99", lead = "From $9.99",
+                        onUnlock = {}, onRestore = {}, onBack = {}, onShare = {}, onLetter = {},
+                        onShareCount = {}, onChecks = {}, onDocument = { opened = it },
+                    )
+                }
+            }
+        }
+        // The card speaks as one node, so the button inside it has to be an action on the card.
+        val offers = SemanticsMatcher("offers See it in the lease") { node ->
+            node.config.getOrNull(SemanticsActions.CustomActions).orEmpty().any { it.label == "See it in the lease" }
+        }
+        compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(offers)
+        val card = compose.onAllNodes(offers).onFirst().fetchSemanticsNode()
+        compose.runOnIdle {
+            card.config[SemanticsActions.CustomActions].first { it.label == "See it in the lease" }.action()
+        }
+        // Only the first card opens by itself, so it is the one that answers.
+        assertEquals(state.groups.first().clause.index, opened)
     }
 
     @Test
