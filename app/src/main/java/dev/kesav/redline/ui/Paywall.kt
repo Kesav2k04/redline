@@ -32,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +40,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,9 +48,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,6 +61,7 @@ import dev.kesav.redline.Offer
 import dev.kesav.redline.Plan
 import dev.kesav.redline.ScanState
 import dev.kesav.redline.Severity
+import kotlinx.coroutines.delay
 
 /** Why the paywall opened, so its headline can answer the tap that raised it. */
 internal enum class PaywallReason { REPORT, DRAFT, COMPARE }
@@ -84,6 +90,8 @@ internal fun PaywallSheet(
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
     storeKey: Boolean = true,
+    message: String? = null,
+    storeReached: Boolean = false,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = LocalHapticFeedback.current
@@ -99,8 +107,19 @@ internal fun PaywallSheet(
         else -> passOffer?.plan ?: proOffers.firstOrNull()?.plan
     }
     var chosen by rememberSaveable(offers.map { it.plan }) { mutableStateOf(defaultPlan) }
-    // Without a store key there is nothing to reach, so asking again would only spin.
-    LaunchedEffect(offers.isEmpty()) { if (offers.isEmpty() && storeKey) onRetry() }
+    // Without a store key there is nothing to reach, so asking again would only spin. With one,
+    // the wait gets about ten seconds before the sheet says there is no connection and offers
+    // to try again, and trying again starts the wait over.
+    var tries by remember { mutableIntStateOf(0) }
+    var waited by remember { mutableStateOf(false) }
+    LaunchedEffect(offers.isEmpty(), tries) {
+        waited = false
+        if (offers.isEmpty() && storeKey) {
+            onRetry()
+            delay(OFFLINE_AFTER_MILLIS)
+            waited = true
+        }
+    }
 
     val locked = (state.groups.size - 1).coerceAtLeast(0)
     val serious = state.groups.drop(1).count { it.worst == Severity.HIGH }
@@ -151,22 +170,35 @@ internal fun PaywallSheet(
             Spacer(Modifier.height(Space.xl))
             Benefit(RedlineIcons.Documents, "Each flagged clause, quoted in full", "With the reason and the fair wording to ask for")
             Benefit(RedlineIcons.Calculator, "Where the money goes", "Every sum the lease states, and the clause it sits in")
-            Benefit(RedlineIcons.Pen, "Replies drafted for you", "An email and a WhatsApp message, one tap to send")
+            Benefit(RedlineIcons.Pen, "Replies drafted for you", "An email or a WhatsApp message, ready to send")
             Benefit(RedlineIcons.Download, "The report as a PDF", "To hand to a parent, a friend or a lawyer")
 
             Spacer(Modifier.height(Space.xl))
             if (offers.isEmpty()) {
+                // The store answered with nothing to sell, or the wait ran out: either way the
+                // spinner would be a promise, so it goes and a way to ask again takes its place.
+                val stuck = storeKey && (storeReached || waited)
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 88.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.m),
                 ) {
-                    if (storeKey) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    if (storeKey && !stuck) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     Text(
-                        noOffersLine(storeKey),
+                        noOffersLine(storeKey, reached = storeReached, waited = waited),
                         style = MaterialTheme.typography.bodyMedium,
                         color = scheme.onSurfaceVariant,
                     )
+                }
+                if (stuck) {
+                    OutlinedButton(
+                        onClick = { tries++ },
+                        shape = MaterialTheme.shapes.medium,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = scheme.onSurface),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    ) {
+                        Text("Try again")
+                    }
                 }
             } else {
                 Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Space.m)) {
@@ -232,6 +264,19 @@ internal fun PaywallSheet(
             }
 
             Spacer(Modifier.height(Space.l))
+            // What the last purchase or restore came to. The snackbar draws under this sheet,
+            // so a message sent there is never seen from here.
+            if (message != null) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = Space.m)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
             val offer = offers.firstOrNull { it.plan == chosen }
             val press = remember { MutableInteractionSource() }
             Button(
@@ -276,11 +321,18 @@ internal fun PaywallSheet(
 
 /**
  * What stands in for the plan cards while there are no offers. With a store key the wait is
- * real and ends; a build made without one never gets offers, so it says so once and stops.
+ * real and ends; a build made without one never gets offers, so it says so once and stops. A
+ * store that answered with nothing to sell is not a lost connection, and is not called one.
  */
-internal fun noOffersLine(storeKey: Boolean): String =
-    if (storeKey) "Reaching the store for prices. Your scan is kept."
-    else "This build has no store key, so purchases are off. The v1.0.0 Release APK on GitHub has them."
+internal fun noOffersLine(storeKey: Boolean, reached: Boolean = false, waited: Boolean = false): String = when {
+    !storeKey -> "This build has no store key, so purchases are off. The v1.0.0 Release APK on GitHub has them."
+    reached -> "Purchases are not available right now."
+    waited -> "No connection. Prices need the internet. Your scan is kept."
+    else -> "Reaching the store for prices. Your scan is kept."
+}
+
+/** How long the sheet waits on the store before it says there is no connection. */
+internal const val OFFLINE_AFTER_MILLIS = 10_000L
 
 internal fun ctaLabel(offer: Offer?): String = when {
     offer == null -> "Choose a plan"
@@ -295,7 +347,7 @@ internal fun ctaLabel(offer: Offer?): String = when {
 internal fun termsLine(offer: Offer?): String = when (offer?.plan) {
     null -> "Prices come from the store in your own currency."
     Plan.PASS -> "One payment of ${offer.price}. Opens this lease only, on this phone. No subscription."
-    Plan.PRO_LIFETIME -> "One payment of ${offer.price}. Every lease you scan, for as long as you keep the app. No subscription."
+    Plan.PRO_LIFETIME -> "One payment of ${offer.price}. Every lease you scan. No subscription."
     Plan.PRO_ANNUAL, Plan.PRO_MONTHLY -> {
         val every = if (offer.plan == Plan.PRO_ANNUAL) "year" else "month"
         if (offer.trial != null) {
@@ -348,6 +400,9 @@ private fun PlanCard(
             .pressScale(press)
             .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton, interactionSource = press, indication = null),
     ) {
+        // The price column is measured first, so at large font it left the title a sliver. Above
+        // 1.3x the price goes under the title instead; at normal size nothing moves.
+        val large = LocalDensity.current.fontScale > 1.3f
         Row(Modifier.padding(Space.l), verticalAlignment = Alignment.CenterVertically) {
             Radio(selected)
             Column(Modifier.weight(1f).padding(horizontal = Space.m)) {
@@ -356,10 +411,17 @@ private fun PlanCard(
                     if (badge != null) Badge(badge, scheme.primary, onColor = scheme.onPrimary)
                 }
                 Text(detail, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                if (large) {
+                    Spacer(Modifier.height(Space.s))
+                    Text(offer.price, style = FigureStyle.copy(fontSize = 20.sp))
+                    Text(terms, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(offer.price, style = FigureStyle.copy(fontSize = 20.sp))
-                Text(terms, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+            if (!large) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(offer.price, style = FigureStyle.copy(fontSize = 20.sp))
+                    Text(terms, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                }
             }
         }
     }

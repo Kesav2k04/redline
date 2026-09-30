@@ -16,6 +16,8 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -123,6 +125,8 @@ object LeaseImport {
                     var recognised = false
 
                     for (i in 0 until count) {
+                        // A page read from its text layer never suspends, so Cancel is let in here.
+                        currentCoroutineContext().ensureActive()
                         // The share of pages already read, once there is more than one to count.
                         progress("Reading page ${i + 1} of $count", if (count > 1) i.toFloat() / count else null)
                         val page = renderer.openPage(i)
@@ -141,7 +145,7 @@ object LeaseImport {
 
                     val text = PageText.assemble(pages)
                     return if (text.isBlank()) {
-                        Result.Failed("No text found in that PDF.")
+                        Result.Failed("No text found. Try Scan paper, or paste the text.")
                     } else {
                         Result.Read(text, name, Kind.PDF, count, total, recognised)
                     }

@@ -11,6 +11,9 @@ import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchaseParams
 import com.revenuecat.purchases.PurchasesConfiguration
+import com.revenuecat.purchases.PurchasesErrorCode
+import com.revenuecat.purchases.PurchasesException
+import com.revenuecat.purchases.PurchasesTransactionException
 import com.revenuecat.purchases.awaitCustomerInfo
 import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
 import com.revenuecat.purchases.awaitOfferings
@@ -55,6 +58,14 @@ object Billing {
      */
     private val _known = MutableStateFlow(false)
     val known: StateFlow<Boolean> = _known.asStateFlow()
+
+    /**
+     * True while the last entitlement read failed and nothing has answered since. [known] is set
+     * either way so the screen can be used, which left a buyer who reinstalled and opened the app
+     * offline locked out for the whole session. This is what says to ask again.
+     */
+    private val _readFailed = MutableStateFlow(false)
+    val readFailed: StateFlow<Boolean> = _readFailed.asStateFlow()
 
     /** False when no key is configured, so a clean clone still builds and runs. */
     var configured: Boolean = false
@@ -119,36 +130,86 @@ object Billing {
         }
         runCatching { Purchases.sharedInstance.awaitCustomerInfo() }
             .onSuccess { apply(it) }
-            .onFailure { Log.w(TAG, "Could not read entitlements: ${it.message}") }
+            .onFailure {
+                Log.w(TAG, "Could not read entitlements: ${it.message}")
+                _readFailed.value = true
+            }
         _known.value = true
     }
+
+    /**
+     * Whether the last offering fetch got an answer from the store, whatever it held. An offering
+     * with nothing the paywall can sell looks the same as no connection from the offering alone,
+     * and the two need different words.
+     */
+    private val _storeReached = MutableStateFlow(false)
+    val storeReached: StateFlow<Boolean> = _storeReached.asStateFlow()
 
     suspend fun loadOffering() {
         if (!configured) return
         runCatching { Purchases.sharedInstance.awaitOfferings() }
-            .onSuccess { _offering.value = it.current }
-            .onFailure { Log.w(TAG, "Could not load offerings: ${it.message}") }
+            .onSuccess {
+                _offering.value = it.current
+                _storeReached.value = true
+            }
+            .onFailure {
+                Log.w(TAG, "Could not load offerings: ${it.message}")
+                // Play reports a dropped connection as a store problem as often as a network one.
+                val code = (it as? PurchasesException)?.code
+                _storeReached.value = code != null &&
+                    code != PurchasesErrorCode.NetworkError && code != PurchasesErrorCode.StoreProblemError
+            }
     }
 
     /** How a purchase ended. A cancel is its own outcome, never an error to show. */
     sealed interface Outcome {
         data object Bought : Outcome
         data object Cancelled : Outcome
+        /** The store will not sell what this Google account already owns; a restore fetches it. */
+        data object Owned : Outcome
         data class Failed(val message: String) : Outcome
     }
 
+    const val NOT_CONFIGURED = "Purchases are not configured in this build."
+    const val STORE_UNREACHABLE = "The store could not be reached. Check the connection and try again."
+    const val ALREADY_OWNED = "The store says you already own this, but it did not open here. Check the connection and tap Restore."
+    const val NOTHING_TO_RESTORE = "No earlier purchase was found. If you paid with another Google account, switch to it in the Play Store and tap Restore again."
+
+    /**
+     * What a failed purchase says in the sheet, by the store's error code. The SDK's own text is
+     * written for developers ("Error performing request."), and a pending payment read as a failure.
+     */
+    internal fun purchaseProblem(code: PurchasesErrorCode?): String = when (code) {
+        PurchasesErrorCode.PaymentPendingError -> "Payment pending. The report opens when the store confirms it."
+        PurchasesErrorCode.NetworkError ->
+            "The connection dropped. If you were charged, the report opens when you are back online, or tap Restore."
+        PurchasesErrorCode.PurchaseNotAllowedError, PurchasesErrorCode.InsufficientPermissionsError ->
+            "This phone or Google account is not allowed to make purchases. Check the Play Store settings."
+        else -> "The purchase did not go through. Try again, or tap Restore if you were charged."
+    }
+
+    /** What a failed restore says in the sheet, by the store's error code. */
+    internal fun restoreProblem(code: PurchasesErrorCode?): String = when (code) {
+        PurchasesErrorCode.NetworkError -> STORE_UNREACHABLE
+        else -> "Restore did not finish. Try again in a moment."
+    }
+
     suspend fun purchase(activity: Activity, pkg: Package): Outcome {
-        if (!configured) return Outcome.Failed("Purchases are not configured in this build.")
+        if (!configured) return Outcome.Failed(NOT_CONFIGURED)
 
         return runCatching {
             val params = PurchaseParams.Builder(activity, pkg).build()
             apply(Purchases.sharedInstance.awaitPurchase(params).customerInfo)
             Outcome.Bought
         }.getOrElse { error ->
-            if (error is com.revenuecat.purchases.PurchasesTransactionException && error.userCancelled) {
-                Outcome.Cancelled
-            } else {
-                Outcome.Failed(error.message ?: "The purchase did not complete.")
+            val code = (error as? PurchasesException)?.code
+            when {
+                error is PurchasesTransactionException && error.userCancelled -> Outcome.Cancelled
+                code == PurchasesErrorCode.ProductAlreadyPurchasedError -> Outcome.Owned
+                else -> {
+                    Log.w(TAG, "Purchase failed, $code: ${error.message}")
+                    Outcome.Failed(purchaseProblem(code))
+                }
             }
         }
     }
@@ -158,7 +219,7 @@ object Billing {
      * path, and it is the one a buyer needs most.
      */
     suspend fun restore(): String? {
-        if (!configured) return "Purchases are not configured in this build."
+        if (!configured) return NOT_CONFIGURED
 
         return runCatching {
             apply(Purchases.sharedInstance.awaitRestore())
@@ -171,8 +232,12 @@ object Billing {
                 runCatching { Purchases.sharedInstance.awaitCustomerInfo() }.onSuccess(::apply)
             }
 
-            if (_unlocked.value) null else "Nothing to restore on this account."
-        }.getOrElse { it.message ?: "Restore did not complete." }
+            if (_unlocked.value) null else NOTHING_TO_RESTORE
+        }.getOrElse { error ->
+            val code = (error as? PurchasesException)?.code
+            Log.w(TAG, "Restore failed, $code: ${error.message}")
+            restoreProblem(code)
+        }
     }
 
     /**
@@ -185,5 +250,7 @@ object Billing {
     private fun apply(info: CustomerInfo) {
         _unlocked.value = info.entitlements[ENTITLEMENT]?.isActive == true
         _oneTime.value = info.nonSubscriptionTransactions.map { it.productIdentifier }.toSet()
+        // Any answer, from a read, a purchase, a restore or the listener, ends a failed read.
+        _readFailed.value = false
     }
 }

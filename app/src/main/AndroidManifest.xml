@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- The in-app page scanner. Not required: without a camera the app still reads a PDF,
          a photo or pasted text, so it stays installable on a device that has none. -->
@@ -11,13 +12,19 @@
         <package android:name="com.whatsapp" />
     </queries>
 
+    <!-- Backup stays on for the settings, but the saved leases are left out of it, because the
+         app promises the lease text stays on the phone. Android 12 and later read the first
+         rules file, Android 11 and earlier the second. -->
     <application
         android:name=".RedlineApp"
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Redline">
+        android:theme="@style/Theme.Redline"
+        tools:targetApi="31">
 
         <activity
             android:name=".MainActivity"

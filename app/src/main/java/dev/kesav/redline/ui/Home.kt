@@ -33,12 +33,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -117,13 +119,20 @@ internal fun Editor(
     onOpenSaved: (SavedLease) -> Unit = {},
     onForget: (String) -> Unit = {},
     backEnabled: Boolean = true,
+    onCancelReading: () -> Unit = {},
+    onClear: () -> Unit = { onText("") },
 ) {
     // Set by the paste tile when the clipboard is empty, so there is a field to type or
     // paste into. Saved, so rotating the phone does not throw the reader back a step.
     var composing by rememberSaveable { mutableStateOf(false) }
 
     when {
-        reading != null -> Reading(reading, readingProgress, modifier)
+        reading != null -> {
+            // Back stops the read instead of closing the app and losing it. Off under the
+            // camera for the same reason as the handler below.
+            BackHandler(enabled = backEnabled, onBack = onCancelReading)
+            Reading(reading, readingProgress, onCancel = onCancelReading, modifier = modifier)
+        }
 
         text.isNotEmpty() || composing -> {
             // Back from the lease returns to the ways in, as Start over does, instead of
@@ -131,7 +140,7 @@ internal fun Editor(
             // the caller turns this off while the camera is open or it would take the press.
             BackHandler(enabled = backEnabled) {
                 composing = false
-                onText("")
+                onClear()
             }
             Document(
                 text = text,
@@ -143,7 +152,7 @@ internal fun Editor(
                 onPhoto = onPhoto,
                 onStartOver = {
                     composing = false
-                    onText("")
+                    onClear()
                 },
                 focusOnOpen = composing && text.isEmpty(),
                 modifier = modifier,
@@ -289,7 +298,8 @@ private fun Pdf(onOpen: () -> Unit, modifier: Modifier = Modifier) {
         Text(
             "The file your landlord or agent sent",
             style = MaterialTheme.typography.bodySmall,
-            color = scheme.onPrimary.copy(alpha = 0.82f),
+            // Full white: at 0.82 this small line was about 3.7:1 on the red, under AA.
+            color = scheme.onPrimary,
         )
     }
 }
@@ -330,7 +340,7 @@ private fun Way(
                 Text(
                     detail,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (filled) content.copy(alpha = 0.82f) else scheme.onSurfaceVariant,
+                    color = if (filled) content else scheme.onSurfaceVariant,
                 )
             }
         }
@@ -533,14 +543,14 @@ private fun Promise() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Assurances() {
-    // Wraps as whole marks, so large text moves "Offline" to its own line instead of
-    // breaking it after the N.
+    // Wraps as whole marks, so large text moves "Works offline" to its own line instead of
+    // breaking it after the N. "Works", because "Offline" alone read as the phone's status.
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(Space.m),
         verticalArrangement = Arrangement.spacedBy(Space.xs),
     ) {
         Assurance(RedlineIcons.ShieldCheck, "On this phone")
-        Assurance(RedlineIcons.Offline, "Offline")
+        Assurance(RedlineIcons.Offline, "Works offline")
     }
 }
 
@@ -623,7 +633,7 @@ private fun RedlinedHeadline(before: String, marked: String, after: String, colo
  * the hero, heading bar and red margin rule, so the wait looks like the same lease arriving.
  */
 @Composable
-private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifier) {
+private fun Reading(step: String, progress: Float?, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val moving = animationsEnabled()
     // One way, top to bottom, then back to the top unseen. Going back and forth read as a
@@ -740,6 +750,16 @@ private fun Reading(step: String, progress: Float?, modifier: Modifier = Modifie
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
             )
+        }
+        // The wrong file, or a wait that runs long, needs a way out that keeps the app open.
+        Spacer(Modifier.height(Space.l))
+        TextButton(
+            onClick = onCancel,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.heightIn(min = 48.dp),
+            colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurfaceVariant),
+        ) {
+            Text("Cancel")
         }
     }
 }

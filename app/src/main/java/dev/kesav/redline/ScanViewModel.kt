@@ -11,6 +11,7 @@ import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -105,6 +107,9 @@ sealed interface ScanState {
 /** How long a forgotten lease can be brought back, before any accessibility allowance. */
 internal const val UNDO_HOLD_MILLIS = 5_000L
 
+/** The field as it was just before Start over or Back cleared it, held for Undo. */
+data class ClearedText(val text: String, val source: String?, val photoPages: Int, val rent: Long?)
+
 data class ScanUi(
     val text: String = "",
     val state: ScanState = ScanState.Editing,
@@ -122,10 +127,21 @@ data class ScanUi(
     val saved: List<SavedLease> = emptyList(),
     /** A lease just forgotten, held so one tap can put it back, or null once the hold ends. */
     val forgotten: SavedLease? = null,
+    /** Lease text just cleared by Start over or Back, held the same way, or null. */
+    val cleared: ClearedText? = null,
     /** False until the first entitlement read lands. Distinct from `unlocked == false`. */
     val entitlementsKnown: Boolean = false,
+    /** True while the last entitlement read failed, so the screen knows to ask again. */
+    val entitlementFailed: Boolean = false,
+    /** Whether the last offering fetch reached the store. With no offers, "not on sale" rather than offline. */
+    val storeReached: Boolean = false,
     val busy: Boolean = false,
     val message: String? = null,
+    /**
+     * What the last purchase or restore came to, in plain words. The paywall sheet draws above
+     * the snackbar, so this shows in the sheet while it is open and in the snackbar otherwise.
+     */
+    val storeMessage: String? = null,
     val offer: Package? = null,
     /** What the reader is waiting on while a PDF or photo is read, or null when idle. */
     val reading: String? = null,
@@ -166,6 +182,17 @@ data class ScanUi(
  */
 internal fun chooseOffer(types: List<PackageType>): Int? =
     types.indexOf(PackageType.LIFETIME).takeIf { it >= 0 }
+
+internal const val PRO_NOT_ON = "Payment went through, but Renter Pro did not switch on. Tap Restore."
+
+/**
+ * What the sheet says once the store reports a purchase as made. A Pro plan that comes back
+ * without the entitlement means the product is not attached to it on the dashboard: the reader
+ * has paid and nothing opened, which must never pass in silence. A pass opens by the lease's
+ * fingerprint rather than by the entitlement, so it has nothing to report here.
+ */
+internal fun afterPurchase(plan: Plan, entitled: Boolean): String? =
+    if (plan != Plan.PASS && !entitled) PRO_NOT_ON else null
 
 class ScanViewModel(app: Application, private val saved: SavedStateHandle) : AndroidViewModel(app) {
 
@@ -214,6 +241,12 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
             Billing.known.collect { known -> _ui.update { it.copy(entitlementsKnown = known) } }
         }
         viewModelScope.launch {
+            Billing.readFailed.collect { failed -> _ui.update { it.copy(entitlementFailed = failed) } }
+        }
+        viewModelScope.launch {
+            Billing.storeReached.collect { reached -> _ui.update { it.copy(storeReached = reached) } }
+        }
+        viewModelScope.launch {
             Billing.offering.collect { offering ->
                 val packages = offering?.availablePackages.orEmpty()
                 val offer = offerFrom(offering)
@@ -242,9 +275,13 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     /** A PDF or photo shared or opened from another app. Same rule as [seed]: once. */
     fun seedFile(uri: Uri?) {
-        if (uri == null || _ui.value.text.isNotEmpty() || _ui.value.reading != null) return
+        // Once per file, too, so a read the reader cancelled does not start again on rotation.
+        if (uri == null || uri == seededFile || _ui.value.text.isNotEmpty() || _ui.value.reading != null) return
+        seededFile = uri
         import(uri)
     }
+
+    private var seededFile: Uri? = null
 
     fun edit(text: String) {
         // Typing makes it the reader's text, so the note saying which file it came from
@@ -264,19 +301,17 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
         // still being read waits its turn instead of being dropped. Anything else arriving
         // mid-read is refused, as before: it would replace the document being read.
         if (!photo && _ui.value.reading != null) return after()
-        viewModelScope.launch { importLock.withLock {
+        viewModelScope.launch(reads) { try { importLock.withLock {
             _ui.update { it.copy(reading = "Opening the file", readingProgress = null, message = null) }
             // A whole PDF read from its own text layer has nothing to proofread, and
             // parking the reader in front of fourteen pages of it before the verdict only
             // taught them to press Scan without looking. Recognised text still stops in the
             // editor, where a misread figure can be fixed first.
             var straightToScan = false
-            val result = try {
-                LeaseImport.read(getApplication(), uri) { step, done ->
-                    _ui.update { it.copy(reading = step, readingProgress = done) }
-                }
-            } finally {
-                after()
+            val result = LeaseImport.read(getApplication(), uri) { step, done ->
+                // A cancelled read can still report the page it was on, and that must not
+                // bring the Reading screen back.
+                _ui.update { if (isActive) it.copy(reading = step, readingProgress = done) else it }
             }
             when (result) {
                 is LeaseImport.Result.Failed ->
@@ -298,10 +333,27 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 }
             }
             if (straightToScan) scan()
+        } } finally {
+            // Here rather than around the read, so a photo still waiting its turn when the
+            // read is cancelled is deleted all the same.
+            after()
         } }
     }
 
     private val importLock = kotlinx.coroutines.sync.Mutex()
+
+    /** Parent of every read in flight or queued, so Cancel stops them all at once. */
+    private var reads = SupervisorJob(viewModelScope.coroutineContext[Job])
+
+    /**
+     * Stops the PDF or photo being read and returns to where the reader was: the ways in, or
+     * the pages already photographed. Nothing from the stopped read reaches the field.
+     */
+    fun cancelImport() {
+        reads.cancel()
+        reads = SupervisorJob(viewModelScope.coroutineContext[Job])
+        _ui.update { it.copy(reading = null, readingProgress = null) }
+    }
 
     private fun describe(read: LeaseImport.Result.Read, photoPages: Int): String {
         val what = when {
@@ -399,6 +451,46 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     private var forgetHold: Job? = null
 
+    /**
+     * Empties the field, as Start over and Back do, and holds what was there for [holdMillis] so
+     * one tap can put it back. A lease that took a long read, or was pasted in, is real work.
+     */
+    fun clear(holdMillis: Long = UNDO_HOLD_MILLIS) {
+        val now = _ui.value
+        clearHold?.cancel()
+        val held = now.text.takeIf { it.isNotBlank() }?.let { ClearedText(it, now.source, now.photoPages, now.rent) }
+        edit("")
+        _ui.update { it.copy(cleared = held) }
+        if (held != null) {
+            clearHold = viewModelScope.launch {
+                delay(holdMillis)
+                _ui.update { it.copy(cleared = null) }
+            }
+        }
+    }
+
+    /** Puts back the text [clear] is holding, unless something new has gone into the field since. */
+    fun undoClear() {
+        val held = _ui.value.cleared ?: return
+        clearHold?.cancel()
+        _ui.update {
+            if (it.text.isNotEmpty()) {
+                it.copy(cleared = null)
+            } else {
+                it.copy(
+                    text = held.text,
+                    source = held.source,
+                    photoPages = held.photoPages,
+                    rent = held.rent,
+                    state = ScanState.Editing,
+                    cleared = null,
+                )
+            }
+        }
+    }
+
+    private var clearHold: Job? = null
+
     // Saving, forgetting and restoring each read the whole file and write it back, so two at
     // once would lose one of them.
     private val storeLock = kotlinx.coroutines.sync.Mutex()
@@ -422,7 +514,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     fun buy(activity: Activity, plan: Plan? = null) {
         viewModelScope.launch {
-            _ui.update { it.copy(busy = true, message = null) }
+            _ui.update { it.copy(busy = true, message = null, storeMessage = null) }
             // The app says it works offline, and it does, which means it can start with
             // no offering at all. The offering was only ever fetched at launch, so a
             // reader who scanned on the metro and then got signal was told no offering
@@ -433,9 +525,7 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                 ?: offers.firstOrNull { it.plan == Plan.PRO_LIFETIME }
                 ?: offers.firstOrNull()
             if (chosen == null) {
-                _ui.update {
-                    it.copy(busy = false, message = "The store could not be reached. Check the connection and try again.")
-                }
+                _ui.update { it.copy(busy = false, storeMessage = Billing.STORE_UNREACHABLE) }
                 return@launch
             }
             // The lease is fingerprinted before the purchase sheet goes up, so a pass opens
@@ -448,24 +538,46 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
                         prefs().edit().putStringSet(KEY_PASSES, passes).apply()
                         _ui.update { it.copy(passes = passes) }
                     }
-                    _ui.update { it.copy(busy = false).withAccess() }
+                    val note = afterPurchase(chosen.plan, Billing.unlocked.value)
+                    if (note != null) {
+                        Log.e("Billing", "Bought ${chosen.pkg.product.id}, but ${Billing.ENTITLEMENT} is not active.")
+                    }
+                    _ui.update { it.copy(busy = false, storeMessage = note).withAccess() }
                 }
                 Billing.Outcome.Cancelled -> _ui.update { it.copy(busy = false) }
-                is Billing.Outcome.Failed -> _ui.update { it.copy(busy = false, message = outcome.message) }
+                // Bought on another phone, which is another purchase ID here, so Play refuses to
+                // sell it again. A restore brings it across instead of a dead end.
+                Billing.Outcome.Owned -> {
+                    val problem = Billing.restore()
+                    _ui.update { it.copy(busy = false, storeMessage = problem?.let { Billing.ALREADY_OWNED }).withAccess() }
+                }
+                is Billing.Outcome.Failed -> _ui.update { it.copy(busy = false, storeMessage = outcome.message) }
             }
         }
     }
 
     /**
      * Fetches the offering again when the paywall is on screen without one, so the price
-     * appears on the button once the phone is back online rather than never.
+     * appears on the button once the phone is back online rather than never. Keyed on every
+     * plan, not the lifetime one alone, which kept polling an offering that sold only monthly.
      */
     fun retryOffer() {
-        if (_ui.value.offer != null || offerRetry?.isActive == true) return
+        if (_ui.value.offers.isNotEmpty() || offerRetry?.isActive == true) return
         offerRetry = viewModelScope.launch { Billing.loadOffering() }
     }
 
     private var offerRetry: kotlinx.coroutines.Job? = null
+
+    /**
+     * Reads the entitlement again when the last read failed, so a buyer who opened the app
+     * offline gets the report back once the signal returns, without a restart.
+     */
+    fun retryEntitlement() {
+        if (!Billing.readFailed.value || entitlementRetry?.isActive == true) return
+        entitlementRetry = viewModelScope.launch { Billing.refresh() }
+    }
+
+    private var entitlementRetry: Job? = null
 
     /** Pro opens everything; a pass opens only the lease it was bought for. */
     private fun ScanUi.withAccess(): ScanUi =
@@ -478,9 +590,9 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     fun restore() {
         viewModelScope.launch {
-            _ui.update { it.copy(busy = true, message = null) }
+            _ui.update { it.copy(busy = true, message = null, storeMessage = null) }
             val error = Billing.restore()
-            _ui.update { it.copy(busy = false, message = error) }
+            _ui.update { it.copy(busy = false, storeMessage = error) }
         }
     }
 
@@ -495,6 +607,10 @@ class ScanViewModel(app: Application, private val saved: SavedStateHandle) : And
 
     fun dismissMessage() {
         _ui.update { it.copy(message = null) }
+    }
+
+    fun dismissStoreMessage() {
+        _ui.update { it.copy(storeMessage = null) }
     }
 
     private companion object {

@@ -34,7 +34,7 @@ class TermsLineTest {
     @Test
     fun `pro lifetime discloses one payment and no subscription`() {
         val o = offer(Plan.PRO_LIFETIME, PackageType.LIFETIME, "$4.99")
-        assertEquals("One payment of $4.99. Every lease you scan, for as long as you keep the app. No subscription.", termsLine(o))
+        assertEquals("One payment of $4.99. Every lease you scan. No subscription.", termsLine(o))
     }
 
     @Test

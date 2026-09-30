@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and earlier, where this one file covers both cloud backup and a transfer to a
+     new phone. The saved leases stay on this phone; everything else is backed up as before. -->
+<full-backup-content>
+    <exclude domain="file" path="leases.json" />
+    <exclude domain="file" path="leases.json.tmp" />
+</full-backup-content>

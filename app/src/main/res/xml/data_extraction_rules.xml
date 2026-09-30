@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and later. The saved leases stay on this phone: they are left out of the cloud
+     backup and out of a transfer to a new phone. Everything else is backed up as before. The
+     .tmp file is the one LeaseStore writes just before it replaces leases.json. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="leases.json" />
+        <exclude domain="file" path="leases.json.tmp" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="leases.json" />
+        <exclude domain="file" path="leases.json.tmp" />
+    </device-transfer>
+</data-extraction-rules>

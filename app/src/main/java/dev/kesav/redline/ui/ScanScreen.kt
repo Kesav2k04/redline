@@ -110,6 +110,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -139,7 +141,11 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Activity
 import android.content.ContextWrapper
@@ -184,6 +190,17 @@ fun ScanScreen(
     var reading by rememberSaveable { mutableStateOf<Int?>(null) }
     var comparing by rememberSaveable { mutableStateOf(false) }
 
+    // These three outlive the process and the scan does not, so after the process is killed
+    // (most often behind the store's purchase sheet) the reader is back in the editor with them
+    // still set, and the next Scan would pop an old paywall or the comparison open unasked.
+    LaunchedEffect(ui.state is ScanState.Editing) {
+        if (ui.state is ScanState.Editing) {
+            paywall = null
+            reading = null
+            comparing = false
+        }
+    }
+
     // A purchase that lands closes the paywall behind it: the report opening underneath is the
     // receipt. The comparison needs Pro, so a pass bought from that tap leaves it open.
     LaunchedEffect(ui.unlocked, ui.pro) {
@@ -195,18 +212,35 @@ fun ScanScreen(
         if (done) {
             if (paywall == PaywallReason.COMPARE) comparing = true
             paywall = null
+            viewModel.dismissStoreMessage()
         }
     }
 
-    // A paywall with no price is an app that started offline. Keep asking, quietly, while
-    // it is on screen, so the price turns up when the signal does.
-    val priceMissing = ui.offer == null && !ui.unlocked &&
-        (ui.state as? ScanState.Scanned)?.sellable == true
-    LaunchedEffect(priceMissing) {
-        while (priceMissing) {
-            viewModel.retryOffer()
-            delay(15_000)
+    // A paywall with no price is an app that started offline, and so is a report left shut on a
+    // buyer whose entitlement could not be read. Keep asking, quietly, while it is on screen, so
+    // the price and the purchase both turn up when the signal does.
+    val asking = askStoreAgain(
+        pricesMissing = ui.offers.isEmpty() && Billing.configured,
+        readFailed = ui.entitlementFailed,
+        locked = !ui.unlocked && (ui.state as? ScanState.Scanned)?.sellable == true,
+        paywallOpen = paywall != null,
+    )
+    // Only while the app is in front: nobody is waiting on a price from the background.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(asking, lifecycle) {
+        if (asking) lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                viewModel.retryOffer()
+                viewModel.retryEntitlement()
+                delay(15_000)
+            }
         }
+    }
+    // Coming back to the app is often coming back to a signal, so a failed read is tried again
+    // at once rather than on the next tick.
+    LifecycleResumeEffect(Unit) {
+        viewModel.retryEntitlement()
+        onPauseOrDispose { }
     }
 
     // Without this, a back swipe on the results screen finishes the activity and closes
@@ -259,6 +293,17 @@ fun ScanScreen(
         }
     }
 
+    // The paywall shows the store's answer itself. One that lands while the sheet is closed,
+    // from the report's own Restore or after Not now, is said here instead. Read from the view
+    // model rather than this frame, so a line the sheet has just cleared is not said twice.
+    LaunchedEffect(ui.storeMessage, paywall == null) {
+        val note = viewModel.ui.value.storeMessage
+        if (paywall == null && note != null) {
+            snackbar.showSnackbar(note)
+            viewModel.dismissStoreMessage()
+        }
+    }
+
     // A forgotten lease can be put back for as long as the view model holds it, stretched by
     // however long the reader has asked Android to leave controls on screen. The hold is the
     // only timer: when it ends, this effect is cancelled and takes the snackbar with it, so
@@ -279,6 +324,17 @@ fun ScanScreen(
             duration = SnackbarDuration.Indefinite,
         )
         if (result == SnackbarResult.ActionPerformed) viewModel.undoForget()
+    }
+    // The same Undo for the lease text, when Start over or Back clears it. It goes as soon as
+    // the field has something new in it, so Undo never writes over a lease just pasted.
+    LaunchedEffect(ui.cleared, ui.text.isEmpty()) {
+        if (ui.cleared == null || ui.text.isNotEmpty()) return@LaunchedEffect
+        val result = snackbar.showSnackbar(
+            message = "Cleared the lease text",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Indefinite,
+        )
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoClear()
     }
 
     // No app bar. Each state draws its own header: the first screen leads with what
@@ -329,6 +385,8 @@ fun ScanScreen(
                 onChecks = { showChecks = true },
                 reading = ui.reading,
                 readingProgress = ui.readingProgress,
+                onCancelReading = viewModel::cancelImport,
+                onClear = { viewModel.clear(undoHold) },
                 source = ui.source,
                 photoPages = ui.photoPages,
                 onOpen = { openFile.launch(arrayOf("application/pdf", "image/*", "text/plain")) },
@@ -386,7 +444,7 @@ fun ScanScreen(
             ChecksSheet(onDismiss = { showChecks = false })
         }
         val scanned = ui.state as? ScanState.Scanned
-        if (paywall != null && scanned != null) {
+        if (paywall != null && scanned != null && scanned.looksLikeLease) {
             PaywallSheet(
                 state = scanned,
                 offers = ui.offers,
@@ -397,9 +455,14 @@ fun ScanScreen(
                 onBuy = { plan -> activity?.let { viewModel.buy(it, plan) } },
                 onRestore = viewModel::restore,
                 onRetry = viewModel::retryOffer,
-                onDismiss = { paywall = null },
+                onDismiss = {
+                    paywall = null
+                    viewModel.dismissStoreMessage()
+                },
                 // Fixed at launch: set once by Billing.start from the build's key.
                 storeKey = Billing.configured,
+                message = ui.storeMessage,
+                storeReached = ui.storeReached,
             )
         }
         if (choosingPlace) {
@@ -420,9 +483,7 @@ fun ScanScreen(
     val open = reading
     if (open != null && compared != null) {
         // Without the report, only the first clause's findings are readable in the lease too.
-        val locked = remember(compared, ui.unlocked) {
-            if (ui.unlocked) emptySet() else compared.groups.drop(1).map { it.clause.index }.toSet()
-        }
+        val locked = remember(compared, ui.unlocked) { viewerLocks(compared, ui.unlocked) }
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             DocumentViewer(
                 clauses = compared.clauses,
@@ -435,7 +496,8 @@ fun ScanScreen(
             )
         }
     }
-    if (comparing && compared != null) {
+    // Pro is checked here as well as on the tap: a monthly plan can lapse while this is open.
+    if (comparing && compared != null && ui.pro) {
         CompareScreen(
             current = compared,
             currentId = remember(ui.text) { dev.kesav.redline.leaseFingerprint(ui.text) },
@@ -457,6 +519,22 @@ fun ScanScreen(
     }
     }
 }
+
+/**
+ * The clauses the marked-up lease keeps shut, by the report's own rule: none once it is open,
+ * and none over text that is not a lease, because a locked finding here leads straight to the
+ * paywall and that text is never sold.
+ */
+internal fun viewerLocks(state: ScanState.Scanned, unlocked: Boolean): Set<Int> =
+    if (unlocked || !state.sellable) emptySet() else state.groups.drop(1).map { it.clause.index }.toSet()
+
+/**
+ * Whether the report keeps asking the store every so often: for prices that never arrived, or
+ * for an entitlement read that failed, while a locked report or an open paywall is waiting on
+ * it. The paywall counts on its own: Compare opens one over a lease with nothing locked.
+ */
+internal fun askStoreAgain(pricesMissing: Boolean, readFailed: Boolean, locked: Boolean, paywallOpen: Boolean = false): Boolean =
+    (locked || paywallOpen) && (pricesMissing || readFailed)
 
 /**
  * What the app looks for, written down where the reader can see it before paying.
@@ -980,7 +1058,7 @@ internal fun Results(
                         // put two units on one screen and invited a subtraction that
                         // has no sensible answer, at the exact moment someone decides
                         // whether to trust the app with money.
-                        Text(unlockLabel(state.groups.size - 1, null), style = MaterialTheme.typography.labelLarge)
+                        Text(barLabel(state.groups.size - 1, lead, noteShown = !short), style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 }
@@ -1227,10 +1305,12 @@ private fun Summary(state: ScanState.Scanned, locked: Boolean, onShareCount: () 
                         shape = RoundedCornerShape(8.dp),
                         color = hero.content.copy(alpha = 0.08f),
                         contentColor = hero.content,
-                        modifier = Modifier.fillMaxWidth().height(48.dp).rise(blocks[4]),
+                        // A minimum, not a fixed height: from about 1.3x the label wraps, and a
+                        // fixed 48dp cut its second line off.
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).rise(blocks[4]),
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
                         ) {
@@ -1408,6 +1488,16 @@ internal fun unlockLabel(otherClauses: Int, price: String?): String {
 }
 
 /**
+ * The report bar's button. Where the note above it is dropped, on a phone turned on its side,
+ * the price moves into the label, so the button still says it costs money before it opens the
+ * paywall.
+ */
+internal fun barLabel(otherClauses: Int, lead: String?, noteShown: Boolean): String {
+    val label = unlockLabel(otherClauses, null)
+    return if (noteShown || lead == null) label else "$label, ${lead.replaceFirstChar { it.lowercaseChar() }}"
+}
+
+/**
  * Shown above the findings when the text does not read like a tenancy agreement.
  *
  * It says what matched and why that is not the same as the document being a problem,
@@ -1506,6 +1596,11 @@ private fun ClauseCard(
                 contentDescription = spoken
                 if (onToggle != null) {
                     onClick(label = if (expanded) "fold the clause" else "open the clause") { onToggle(); true }
+                }
+                // The card speaks as one node, which hid the button inside it from TalkBack, so
+                // the button is offered as an action wherever it is on screen.
+                if (expanded && onView != null) {
+                    customActions = listOf(CustomAccessibilityAction("See it in the lease") { onView(); true })
                 }
             },
     ) {

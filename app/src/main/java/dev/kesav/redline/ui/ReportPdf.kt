@@ -70,19 +70,24 @@ internal object ReportPdf {
             }
             val quote = layout(group.clause.text.replace(Regex("\\s+"), " ").trim(), 9.5f, MUTED, serif = true, inset = 12f)
 
-            val bodyHeight = body.sumOf { (h, r, a) ->
-                (h.height + 4 + r.height + (a?.let { it.height + 18 } ?: 0) + 10).toDouble()
-            }.toFloat()
-            val blockHeight = labelLayout.height + 8f + bodyHeight + quote.height + 20f
-            pages.need(minOf(blockHeight, H - 2 * M - 40f))
+            val heights = body.map { (h, r, a) -> h.height + 4f + r.height + (a?.let { it.height + 18f } ?: 0f) + 10f }
+            // Only the label is kept with its first finding. The rest may run onto the next page.
+            pages.need(minOf(labelLayout.height + 8f + heights.first(), H - 2 * M - 40f))
 
-            val c = pages.canvas
-            draw(c, labelLayout, M, pages.y)
+            draw(pages.canvas, labelLayout, M, pages.y)
             pages.y += labelLayout.height + 8f
 
-            // The margin mark beside what the scanner says.
-            val markTop = pages.y
-            for ((h, r, a) in body) {
+            // The margin mark beside what the scanner says, one piece per page.
+            val markPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = mark }
+            var markTop = pages.y
+            for ((j, finding) in body.withIndex()) {
+                val (h, r, a) = finding
+                if (j > 0 && !pages.fits(heights[j])) {
+                    pages.canvas.drawRoundRect(RectF(M, markTop, M + 3f, pages.y - 10f), 1.5f, 1.5f, markPaint)
+                    pages.need(heights[j])
+                    markTop = pages.y
+                }
+                val c = pages.canvas
                 draw(c, h, M + 14f, pages.y); pages.y += h.height + 4f
                 draw(c, r, M + 14f, pages.y); pages.y += r.height
                 if (a != null) {
@@ -94,9 +99,11 @@ internal object ReportPdf {
                 }
                 pages.y += 10f
             }
-            c.drawRoundRect(RectF(M, markTop, M + 3f, pages.y - 10f), 1.5f, 1.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = mark })
+            pages.canvas.drawRoundRect(RectF(M, markTop, M + 3f, pages.y - 10f), 1.5f, 1.5f, markPaint)
 
             // The lease's own words, set like the document they came from.
+            pages.need(minOf(quote.height + 12f, H - 2 * M - 40f))
+            val c = pages.canvas
             c.drawRect(M + 14f, pages.y, M + 16f, pages.y + quote.height, Paint().apply { color = RULE })
             draw(c, quote, M + 14f, pages.y)
             pages.y += quote.height + 12f
@@ -129,8 +136,10 @@ internal object ReportPdf {
 
         init { next() }
 
+        fun fits(height: Float) = y + height <= H - M - 40f
+
         fun need(height: Float) {
-            if (y + height > H - M - 40f) next()
+            if (!fits(height)) next()
         }
 
         private fun next() {
