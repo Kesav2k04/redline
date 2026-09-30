@@ -48,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -209,13 +210,18 @@ internal fun DocumentViewer(
                     .align(Alignment.CenterEnd)
                     .fillMaxHeight()
                     .padding(top = Space.m, bottom = bottom + Space.m)
-                    .width(RAIL_GUTTER),
+                    .width(RAIL_GUTTER + RAIL_REACH),
             )
         }
     }
 }
 
 private val RAIL_GUTTER = 18.dp
+/**
+ * How far the rail's touch area reaches left of the rail it draws: the empty strip of the list's
+ * end padding between the sheet and the rail, so a tap there lands and nothing on the page moves.
+ */
+private val RAIL_REACH = Space.l
 private val MARGIN = 36.dp
 
 @Composable
@@ -355,7 +361,10 @@ private fun ClauseBlock(
                 modifier = Modifier
                     .weight(1f)
                     .then(
+                        // A one-line clause was a 26dp target. Every multi-line clause is taller
+                        // than the minimum already, so only the short ones change.
                         if (group == null) Modifier else Modifier
+                            .minimumInteractiveComponentSize()
                             .clickable(
                                 interactionSource = source,
                                 indication = null,
@@ -551,7 +560,10 @@ private fun FlagRail(
                     val f = (at.y / size.height).coerceIn(0f, 1f)
                     ticks.minByOrNull { abs(it.second - f) }?.let { onJump(it.first) }
                 }
-            },
+            }
+            // After the touch area and before the drawing, so taps reach wider and the rail
+            // is drawn exactly where it was.
+            .padding(start = RAIL_REACH),
     ) {
         val x = size.width / 2
         val track = 2.dp.toPx()
