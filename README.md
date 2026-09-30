@@ -8,7 +8,7 @@
 
 A lease arrives with twenty minutes to sign it. The clauses that take your money are the quiet ones: a deposit of ten months' rent, a refund that waits ninety days, repairs deducted "in the landlord's sole discretion". Redline looks for them, works out what each one costs you and, where a local law caps it, cites the statute. The lease text never leaves the phone. No account, no login, no upload.
 
-**Try it in one minute:** install `app-release.apk` from the [v1.0.0 release](https://github.com/Kesav2k04/redline/releases/tag/v1.0.0), tap **No lease to hand? Open a sample lease**, and turn on airplane mode first if you like. The scan runs entirely on the phone.
+**Try it in one minute:** install `app-release.apk` from the [latest release](https://github.com/Kesav2k04/redline/releases/latest), tap **No lease to hand? Open a sample lease**, and turn on airplane mode first if you like. The scan runs entirely on the phone.
 
 <img src="docs/install-qr.png" width="180" alt="QR code that downloads the Redline APK">
 
