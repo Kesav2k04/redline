@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -399,6 +400,9 @@ private fun PlanCard(
             .pressScale(press)
             .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton, interactionSource = press, indication = null),
     ) {
+        // The price column is measured first, so at large font it left the title a sliver. Above
+        // 1.3x the price goes under the title instead; at normal size nothing moves.
+        val large = LocalDensity.current.fontScale > 1.3f
         Row(Modifier.padding(Space.l), verticalAlignment = Alignment.CenterVertically) {
             Radio(selected)
             Column(Modifier.weight(1f).padding(horizontal = Space.m)) {
@@ -407,10 +411,17 @@ private fun PlanCard(
                     if (badge != null) Badge(badge, scheme.primary, onColor = scheme.onPrimary)
                 }
                 Text(detail, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                if (large) {
+                    Spacer(Modifier.height(Space.s))
+                    Text(offer.price, style = FigureStyle.copy(fontSize = 20.sp))
+                    Text(terms, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(offer.price, style = FigureStyle.copy(fontSize = 20.sp))
-                Text(terms, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+            if (!large) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(offer.price, style = FigureStyle.copy(fontSize = 20.sp))
+                    Text(terms, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                }
             }
         }
     }
