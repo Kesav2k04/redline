@@ -12,7 +12,7 @@ A lease arrives with twenty minutes to sign it. The clauses that take your money
 
 <img src="docs/install-qr.png" width="180" alt="QR code that downloads the Redline APK">
 
-Scan it with the phone camera, or [download the APK](https://github.com/Kesav2k04/redline/releases/latest/download/app-release.apk) (41 MB, Android 8.0 or newer). Android asks once to allow installs from the browser, as it does for any app from outside Google Play. Purchases go through RevenueCat's Test Store, so nothing is charged.
+Scan it with the phone camera, or [download the APK](https://github.com/Kesav2k04/redline/releases/latest/download/app-release.apk) (41 MB, Android 8.0 or newer). Android asks twice, as it does for any app from outside Google Play. First it wants installs allowed from the browser (Settings, then Allow from this source). Then Google Play Protect says it has not seen an app from this developer before: tap More details, then Install anyway. Purchases go through RevenueCat's Test Store, so nothing is charged.
 
 <p align="center">
   <img src="docs/start.png" alt="Start screen: a lease card drawn in 3D that tilts under a finger, three ways to bring a lease in, and the sample lease" width="31%" />
