@@ -333,7 +333,7 @@ internal fun PaywallSheet(
  * store that answered with nothing to sell is not a lost connection, and is not called one.
  */
 internal fun noOffersLine(storeKey: Boolean, reached: Boolean = false, waited: Boolean = false): String = when {
-    !storeKey -> "This build has no store key, so purchases are off. The v1.0.0 Release APK on GitHub has them."
+    !storeKey -> "This build has no store key, so purchases are off. The latest Release APK on GitHub has them."
     reached -> "Purchases are not available right now."
     waited -> "No connection. Prices need the internet. Your scan is kept."
     else -> "Reaching the store for prices. Your scan is kept."

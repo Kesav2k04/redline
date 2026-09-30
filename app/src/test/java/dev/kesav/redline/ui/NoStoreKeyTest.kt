@@ -50,7 +50,7 @@ class NoStoreKeyTest {
     @Test
     fun `a build with no store key says purchases are off and where they are on`() {
         assertEquals(
-            "This build has no store key, so purchases are off. The v1.0.0 Release APK on GitHub has them.",
+            "This build has no store key, so purchases are off. The latest Release APK on GitHub has them.",
             noOffersLine(storeKey = false),
         )
     }
