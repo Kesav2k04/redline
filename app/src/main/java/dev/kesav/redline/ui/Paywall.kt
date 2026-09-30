@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -119,6 +121,12 @@ internal fun PaywallSheet(
             delay(OFFLINE_AFTER_MILLIS)
             waited = true
         }
+    }
+
+    // A message above the button pushes it down, and on a tall sheet that is off the screen.
+    val buyInView = remember { BringIntoViewRequester() }
+    LaunchedEffect(message) {
+        if (message != null) buyInView.bringIntoView()
     }
 
     val locked = (state.groups.size - 1).coerceAtLeast(0)
@@ -289,7 +297,7 @@ internal fun PaywallSheet(
                 enabled = known && offer != null,
                 shape = MaterialTheme.shapes.medium,
                 interactionSource = press,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp).pressScale(press),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp).bringIntoViewRequester(buyInView).pressScale(press),
             ) {
                 if (busy) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = scheme.onPrimary)
