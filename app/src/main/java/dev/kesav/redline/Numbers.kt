@@ -81,12 +81,32 @@ object Numbers {
                 run += tokens[j].value
                 j--
             }
-            val words = run.asReversed()
+            val words = once(run.asReversed())
             val value = parse(words) ?: continue
             val shown = words.singleOrNull()?.takeIf { numeral.matches(it) }?.replace(",", "") ?: value.toString()
             found += Quantity(value, tokens[j + 1].range.first..tokens[i].range.last, shown)
         }
         return found
+    }
+
+    /**
+     * One number written twice, "thirty (30) days", read once.
+     *
+     * US leases spell a figure and repeat it in brackets. The tokenizer drops the brackets,
+     * so the run arrives as `thirty 30` and [parse] would add the two. Only a spelled run
+     * beside a single numeral of the same value is collapsed: "3 lakhs" is a numeral and a
+     * scale, and "5. Ten months" is a clause number and a count, and both are left to [parse].
+     */
+    private fun once(words: List<String>): List<String> {
+        val at = words.indices.singleOrNull { numeral.matches(words[it]) } ?: return words
+        val spelled = when (at) {
+            0 -> words.drop(1)
+            words.lastIndex -> words.dropLast(1)
+            else -> return words
+        }
+        val said = parse(spelled) ?: return words
+        val written = words[at].replace(",", "").toDouble()
+        return if (written == said.toDouble()) listOf(words[at]) else words
     }
 
     fun parse(words: List<String>): Int? {

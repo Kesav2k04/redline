@@ -84,4 +84,39 @@ class NumbersTest {
     fun `a number run into its unit is still read`() {
         assertEquals(30, Numbers.valueBefore("refunded within 30days of vacating", days))
     }
+
+    @Test
+    fun `a spelled number with its numeral in brackets is one number`() {
+        // US leases write "thirty (30) days". The brackets are dropped by the tokenizer, and
+        // the run used to read as thirty plus 30.
+        val q = Numbers.quantities("returned within twenty-one (21) days after the Tenant vacates", days).single()
+        assertEquals(21, q.value)
+        assertEquals("21", q.shown)
+        assertEquals(1, Numbers.valueBefore("a security deposit equal to one (1) month's rent", months))
+        assertEquals(10, Numbers.valueBefore("a term of ten (10) months", months))
+        assertEquals(30, Numbers.valueBefore("returned within thirty (30) days", days))
+        assertEquals(10, Numbers.valueBefore("a late fee of ten (10) percent of the rent", percent))
+    }
+
+    @Test
+    fun `the numeral may come first`() {
+        assertEquals(30, Numbers.valueBefore("returned within 30 (thirty) days", days))
+    }
+
+    @Test
+    fun `a number written once is read as before`() {
+        assertEquals(10, Numbers.valueBefore("a term of 10 months", months))
+        assertEquals(10, Numbers.valueBefore("a term of ten months", months))
+    }
+
+    @Test
+    fun `a numeral beside a different spelled number is not merged`() {
+        // A scale word after a numeral multiplies it. Only a spelled run equal to its numeral
+        // is the same number written twice.
+        assertEquals(300000, Numbers.valueBefore("a deposit of 3 lakhs rupees", rupees))
+        assertEquals(300000, Numbers.parse(listOf("3", "lakhs")))
+        // A clause number before a spelled count is not equal to it, so it is left as 1.0.1
+        // read it.
+        assertEquals(15, Numbers.valueBefore("5. Ten months rent shall be paid in advance", months))
+    }
 }

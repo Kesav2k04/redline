@@ -51,6 +51,15 @@ class PlacesTest {
     }
 
     @Test
+    fun `a legal figure written as words and numeral is not flagged`() {
+        val refund = "Landlord shall return the security deposit to Tenant within twenty-one (21) days after Tenant vacates the Premises."
+        assertFalse("deposit-refund-delay" in ids(refund, Place.CALIFORNIA))
+        assertFalse("deposit-refund-delay" in ids(refund, null))
+        val deposit = "Tenant shall pay a security deposit equal to one (1) month's rent."
+        assertFalse("deposit-size" in ids(deposit, Place.NEW_YORK))
+    }
+
+    @Test
     fun `a deposit back in twenty days is late in New York but not in general`() {
         val clause = "The deposit shall be refunded within twenty days after the Tenant vacates the premises."
         assertFalse("deposit-refund-delay" in ids(clause, null))
