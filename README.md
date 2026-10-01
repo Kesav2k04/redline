@@ -87,7 +87,8 @@ Every call into the RevenueCat SDK sits in `Billing.kt`. The screens read its st
 - **RevenueCat** is contacted for prices, purchases and restores.
 - **Google's ML Kit library** sends its own usage diagnostics (device, app and performance data, not the recognised text), as described in its [data disclosure](https://developers.google.com/ml-kit/android-data-disclosure).
 
-**Why not paste the lease into a chatbot?** A chatbot can read a lease well and name the law, but the lease then sits on an AI company's servers. A lease carries names, home addresses, signatures, phone numbers and often the bank account the rent is paid into, and anything stored on someone else's server can be kept, reviewed or exposed in a breach. The chatbot's answer can also change from one run to the next, and nobody publishes how often it is right. Redline keeps the lease on the phone, gives the same flags every time, and its measured accuracy is below. That also makes it usable by someone checking a lease for another person, such as a tenant-union volunteer, who often cannot upload it.
+> [!NOTE]
+> **Why not paste the lease into a chatbot?** A chatbot can read a lease well and name the law, but the lease then sits on an AI company's servers. A lease carries names, home addresses, signatures, phone numbers and often the bank account the rent is paid into, and anything stored on someone else's server can be kept, reviewed or exposed in a breach. The chatbot's answer can also change from one run to the next, and nobody publishes how often it is right. Redline keeps the lease on the phone, gives the same flags every time, and its measured accuracy is below. That also makes it usable by someone checking a lease for another person, such as a tenant-union volunteer, who often cannot upload it.
 
 ## Why rules instead of embeddings
 
