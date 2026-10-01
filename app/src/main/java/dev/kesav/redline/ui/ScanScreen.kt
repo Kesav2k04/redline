@@ -379,6 +379,7 @@ fun ScanScreen(
             ScanState.Editing -> Editor(
                 text = ui.text,
                 price = priceLead(ui.offers) ?: ui.offer?.product?.price?.formatted?.let { PriceLead(it, from = false, once = true, per = null) },
+                pro = ui.pro,
                 onText = viewModel::edit,
                 onScan = viewModel::scan,
                 onSample = viewModel::loadSample,

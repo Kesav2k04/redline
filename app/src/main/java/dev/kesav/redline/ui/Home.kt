@@ -121,6 +121,7 @@ internal fun Editor(
     backEnabled: Boolean = true,
     onCancelReading: () -> Unit = {},
     onClear: () -> Unit = { onText("") },
+    pro: Boolean = false,
 ) {
     // Set by the paste tile when the clipboard is empty, so there is a field to type or
     // paste into. Saved, so rotating the phone does not throw the reader back a step.
@@ -161,6 +162,7 @@ internal fun Editor(
 
         else -> Start(
             price = price,
+            pro = pro,
             onOpen = onOpen,
             onPhoto = onPhoto,
             onPaste = { clip ->
@@ -195,6 +197,7 @@ private fun Start(
     onOpenSaved: (SavedLease) -> Unit,
     onForget: (String) -> Unit,
     modifier: Modifier = Modifier,
+    pro: Boolean = false,
 ) {
     val clipboard = LocalClipboardManager.current
 
@@ -234,8 +237,11 @@ private fun Start(
         Spacer(Modifier.height(Space.m))
         Sample(onSample)
         Spacer(Modifier.height(Space.l))
-        PriceLine(price)
-        Spacer(Modifier.height(Space.l))
+        // Renter Pro owners have nothing left to buy, and a price here reads as a second bill.
+        if (!pro) {
+            PriceLine(price)
+            Spacer(Modifier.height(Space.l))
+        }
     }
 }
 
