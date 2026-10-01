@@ -21,8 +21,8 @@ android {
         applicationId = "dev.kesav.redline"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
 
         // The text recognition model is native code, about 11 MB per ABI, and every ABI
         // included is paid for by every download of the one APK on the Release. 32-bit
