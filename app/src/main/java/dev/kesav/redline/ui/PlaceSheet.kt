@@ -79,6 +79,14 @@ internal fun PlaceRow(place: Place?, onClick: () -> Unit, modifier: Modifier = M
     }
 }
 
+/**
+ * Where the choice is kept answers the question a privacy-minded reader asks before tapping.
+ * What it changes is said too: a place moves the limits, so flags and the score can move with
+ * it, and a reader who was told only the asks change would read that as a fault.
+ */
+internal const val PLACE_NOTE =
+    "Kept on this phone. It sets the local limits the lease is checked against, so the flags, the score and the asks can change."
+
 /** The places with sourced figures, and a way to say "somewhere else". */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,9 +107,7 @@ internal fun PlaceSheet(current: Place?, onChoose: (Place?) -> Unit, onDismiss: 
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                // The choice changes wording on this phone and nothing else; saying so
-                // answers the question a privacy-minded reader asks before tapping.
-                text = "Kept on this phone. It only changes which limits the asks name.",
+                text = PLACE_NOTE,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
