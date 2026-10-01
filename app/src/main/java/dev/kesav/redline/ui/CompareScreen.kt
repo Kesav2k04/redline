@@ -258,9 +258,13 @@ private fun SideHead(side: Side, wins: Boolean, modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(Space.s))
         Text(side.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-        Text(side.scan.insight.tier.label, style = MaterialTheme.typography.labelMedium, color = tint)
+        Text(sideLabel(side.scan), style = MaterialTheme.typography.labelMedium, color = tint)
     }
 }
+
+/** A lease with nothing flagged is "Nothing matched" here, as on its own report, and not "Low risk". */
+internal fun sideLabel(scan: ScanState.Scanned): String =
+    if (scan.flaggedClauses == 0) "Nothing matched" else scan.insight.tier.label
 
 @Composable
 private fun MetricRow(label: String, left: String, right: String, better: Int) {
